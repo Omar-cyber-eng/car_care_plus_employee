@@ -178,9 +178,18 @@ class _LoginPageState extends State<LoginPage> {
                             (route) => false,
                           );
                         } else if (state is AuthFailure) {
+                          // حساب الورشة يبقى غير نشط حتى يعتمده الأدمن → 403 inactive
+                          final msg = state.errorMessage.toLowerCase();
+                          final isInactive = msg.contains('inactive') ||
+                              msg.contains('غير نشط') ||
+                              msg.contains('قيد');
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text(state.errorMessage),
+                              content: Text(
+                                isInactive
+                                    ? 'حسابك قيد المراجعة من الإدارة. سيتم تفعيله بعد الاعتماد.'
+                                    : state.errorMessage,
+                              ),
                               backgroundColor: AppColors.errorColor,
                             ),
                           );
@@ -239,7 +248,10 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                         GestureDetector(
                           onTap: () {
-                            Navigator.pushNamed(context, Routes.register);
+                            Navigator.pushReplacementNamed(
+                              context,
+                              Routes.register,
+                            );
                           },
                           child: Text(
                             'إنشاء حساب جديد',

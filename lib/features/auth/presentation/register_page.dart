@@ -3,6 +3,7 @@ import 'package:car_care_plus/core/resources/text_style.dart';
 import 'package:car_care_plus/core/validatiors/app_validators.dart';
 import 'package:car_care_plus/core/widgets/customTextField.dart';
 import 'package:flutter/material.dart';
+import 'package:car_care_plus/core/routing/app_routes.dart';
 import 'package:car_care_plus/features/auth/presentation/workshop_info_page.dart';
 
 class RegisterPage extends StatefulWidget {
@@ -234,6 +235,34 @@ class _RegisterPageState extends State<RegisterPage> {
                             .withWeight(FontWeight.bold),
                       ),
                     ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // رابط الانتقال لتسجيل الدخول
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(
+                        'لديك حساب بالفعل؟ ',
+                        style: TextStyles.Size15.withColor(
+                          AppColors.surfaceWhite.withOpacity(0.8),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => Navigator.pushReplacementNamed(
+                          context,
+                          Routes.login,
+                        ),
+                        child: Text(
+                          'تسجيل الدخول',
+                          style: TextStyles.Size15
+                              .withColor(AppColors.surfaceWhite)
+                              .withWeight(FontWeight.bold)
+                              .withDecoration(TextDecoration.underline),
+                        ),
+                      ),
+                    ],
                   ),
 
                   const SizedBox(height: 24),

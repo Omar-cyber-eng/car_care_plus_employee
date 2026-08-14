@@ -79,23 +79,23 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     required String longitude,
   }) async {
     try {
-      final formData = FormData.fromMap({
-        'name': name,
-        'email': email,
-        'phone': phone,
-        'password': password,
-        'password_confirmation': passwordConfirmation,
-        'workshop_name': workshopName,
-        'workshop_name_ar': workshopNameAr,
-        'workshop_address': workshopAddress,
-        'workshop_city': workshopCity,
-        'latitude': latitude,
-        'longitude': longitude,
-      });
-
+      // نرسل JSON خام (مثل login وتسجيل الشركة سابقاً) — لا FormData،
+      // فتسجيل الورشة لا يرفع ملفات والباك-إند يستقبل JSON.
       final response = await dio.post(
         '$baseUrl/auth/register/workshop',
-        data: formData,
+        data: {
+          'name': name,
+          'email': email,
+          'phone': phone,
+          'password': password,
+          'password_confirmation': passwordConfirmation,
+          'workshop_name': workshopName,
+          'workshop_name_ar': workshopNameAr,
+          'workshop_address': workshopAddress,
+          'workshop_city': workshopCity,
+          'latitude': latitude,
+          'longitude': longitude,
+        },
       );
       if ((response.statusCode == 200 || response.statusCode == 201) &&
           response.data['status'] == 1) {
