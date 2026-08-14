@@ -1,5 +1,3 @@
-// lib/features/auth/presentation/cubit/auth_cubit.dart
-
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:car_care_plus/features/auth/domain/repositories/auth_repository.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
@@ -18,20 +16,32 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
-  Future<void> registerCustomer({
+  Future<void> registerWorkshop({
     required String name,
     required String email,
     required String phone,
     required String password,
     required String passwordConfirmation,
+    required String workshopName,
+    required String workshopNameAr,
+    required String workshopAddress,
+    required String workshopCity,
+    required String latitude,
+    required String longitude,
   }) async {
     emit(AuthLoading());
-    final result = await authRepository.registerCustomer(
+    final result = await authRepository.registerWorkshop(
       name: name,
       email: email,
       phone: phone,
       password: password,
       passwordConfirmation: passwordConfirmation,
+      workshopName: workshopName,
+      workshopNameAr: workshopNameAr,
+      workshopAddress: workshopAddress,
+      workshopCity: workshopCity,
+      latitude: latitude,
+      longitude: longitude,
     );
     result.fold(
       (failureMessage) => emit(AuthFailure(failureMessage)),
@@ -39,38 +49,6 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
-  Future<void> registerCompany({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-    required String passwordConfirmation,
-    required String companyName,
-    required String companyNameAr,
-    required String commercialReg,
-    required String taxNumber,
-    required String companyAddress,
-  }) async {
-    emit(AuthLoading());
-    final result = await authRepository.registerCompany(
-      name: name,
-      email: email,
-      phone: phone,
-      password: password,
-      passwordConfirmation: passwordConfirmation,
-      companyName: companyName,
-      companyNameAr: companyNameAr,
-      commercialReg: commercialReg,
-      taxNumber: taxNumber,
-      companyAddress: companyAddress,
-    );
-    result.fold(
-      (failureMessage) => emit(AuthFailure(failureMessage)),
-      (userModel) => emit(AuthSuccess(userModel)),
-    );
-  }
-
-  
   Future<void> sendResetOtp({required String email}) async {
     emit(AuthLoading());
     final result = await authRepository.sendResetOtp(email: email);
@@ -80,7 +58,6 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
- 
   Future<void> resetPasswordWithOtp({
     required String email,
     required String otp,
@@ -100,34 +77,31 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
-// 📥 جلب البروفايل
-Future<void> fetchProfile() async {
-  emit(AuthLoading());
-  final result = await authRepository.getProfile();
-  result.fold(
-    (failureMessage) => emit(AuthFailure(failureMessage)),
-    (userModel) => emit(AuthSuccess(userModel)),
-  );
-}
+  Future<void> fetchProfile() async {
+    emit(AuthLoading());
+    final result = await authRepository.getProfile();
+    result.fold(
+      (failureMessage) => emit(AuthFailure(failureMessage)),
+      (userModel) => emit(AuthSuccess(userModel)),
+    );
+  }
 
-// ✏️ تحديث البروفايل
-Future<void> updateProfile({
-  String? name,
-  String? email,
-  String? phone,
-  String? imagePath,
-}) async {
-  emit(AuthLoading());
-  final result = await authRepository.updateProfile(
-    name: name,
-    email: email,
-    phone: phone,
-    imagePath: imagePath,
-  );
-  result.fold(
-    (failureMessage) => emit(AuthFailure(failureMessage)),
-    (userModel) => emit(AuthSuccess(userModel)),
-  );
-}
-
+  Future<void> updateProfile({
+    String? name,
+    String? email,
+    String? phone,
+    String? imagePath,
+  }) async {
+    emit(AuthLoading());
+    final result = await authRepository.updateProfile(
+      name: name,
+      email: email,
+      phone: phone,
+      imagePath: imagePath,
+    );
+    result.fold(
+      (failureMessage) => emit(AuthFailure(failureMessage)),
+      (userModel) => emit(AuthSuccess(userModel)),
+    );
+  }
 }

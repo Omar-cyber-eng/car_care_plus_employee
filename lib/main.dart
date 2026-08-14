@@ -1,10 +1,6 @@
-import 'package:car_care_plus/core/networking/api_service.dart';
 import 'package:car_care_plus/core/networking/dio_factory.dart';
-import 'package:car_care_plus/features/cars/data/repos/cars_repo.dart';
-import 'package:car_care_plus/features/cars/logic/cars_cubit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dio/dio.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:car_care_plus/Localization/l10n/app_localization.dart';
 import 'package:car_care_plus/core/routing/app_routes.dart';
@@ -28,22 +24,19 @@ class _MyAppState extends State<MyApp> {
 
   late final AppRouter _appRouter;
   late final AuthRepositoryImpl _authRepository;
-  late final CarsRepo _carsRepo;
 
   @override
   void initState() {
     super.initState();
 
-    // 1️⃣ تهيئة Dio والـ ApiService
+    // 1️⃣ تهيئة Dio
     final dio = DioFactory.getDio();
-    final apiService = ApiService();
 
-    // 2️⃣ تهيئة الطبقات الخاصة بـ Auth و Cars
+    // 2️⃣ تهيئة طبقات الـ Auth
     final authRemoteDataSource = AuthRemoteDataSourceImpl(dio: dio);
     _authRepository = AuthRepositoryImpl(
       remoteDataSource: authRemoteDataSource,
     );
-    _carsRepo = CarsRepo(apiService);
 
     // 3️⃣ تهيئة الـ AppRouter
     _appRouter = AppRouter(
@@ -62,22 +55,15 @@ class _MyAppState extends State<MyApp> {
       minTextAdapt: true,
       splitScreenMode: true,
       builder: (context, child) {
-        return MultiBlocProvider(
-          providers: [
-            BlocProvider<AuthCubit>(
-              create: (context) => AuthCubit(authRepository: _authRepository),
-            ),
-            BlocProvider<CarsCubit>(
-              create: (context) => CarsCubit(_carsRepo)..getUserCars(),
-            ),
-          ],
+        return BlocProvider<AuthCubit>(
+          create: (context) => AuthCubit(authRepository: _authRepository),
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             locale: _locale,
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             // 🔗 استخدام الروت نيم هنا
-            initialRoute: Routes.mainLayout,
+            initialRoute: Routes.register,
             onGenerateRoute: _appRouter.generateRoute,
           ),
         );

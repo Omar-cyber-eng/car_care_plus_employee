@@ -7,27 +7,19 @@ abstract class AuthRepository {
     required String password,
   });
 
-  Future<Either<String, UserModel>> registerCustomer({
+  // تسجيل الورشة 
+  Future<Either<String, UserModel>> registerWorkshop({
     required String name,
     required String email,
     required String phone,
     required String password,
     required String passwordConfirmation,
-    bool isActive = true,
-  });
-
-  Future<Either<String, UserModel>> registerCompany({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-    required String passwordConfirmation,
-    required String companyName,
-    required String companyNameAr,
-    required String commercialReg,
-    required String taxNumber,
-    required String companyAddress,
-    bool isActive = false,
+    required String workshopName,
+    required String workshopNameAr,
+    required String workshopAddress,
+    required String workshopCity,
+    required String latitude,
+    required String longitude,
   });
 
   Future<Either<String, String>> sendResetOtp({required String email});
@@ -39,7 +31,6 @@ abstract class AuthRepository {
     required String passwordConfirmation,
   });
 
-  // 🆕 Profile Functions
   Future<Either<String, UserModel>> getProfile();
 
   Future<Either<String, UserModel>> updateProfile({

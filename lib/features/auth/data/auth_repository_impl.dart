@@ -1,5 +1,3 @@
-// lib/features/auth/data/auth_repository_impl.dart
-
 import 'package:car_care_plus/core/helper/shared_pref_helper.dart';
 import 'package:dartz/dartz.dart';
 import 'package:car_care_plus/features/auth/data/auth_remote_data_source.dart';
@@ -23,8 +21,8 @@ class AuthRepositoryImpl implements AuthRepository {
       );
 
       if (user.token != null && user.token!.isNotEmpty) {
-      await SharedPrefHelper.setSecuredString(SharedPrefKeys.userToken, user.token!);
-    }
+        await SharedPrefHelper.setSecuredString(SharedPrefKeys.userToken, user.token!);
+      }
 
       return Right(user);
     } catch (e) {
@@ -33,22 +31,32 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-  Future<Either<String, UserModel>> registerCustomer({
+  Future<Either<String, UserModel>> registerWorkshop({
     required String name,
     required String email,
     required String phone,
     required String password,
     required String passwordConfirmation,
-    bool isActive = true,
+    required String workshopName,
+    required String workshopNameAr,
+    required String workshopAddress,
+    required String workshopCity,
+    required String latitude,
+    required String longitude,
   }) async {
     try {
-      final user = await remoteDataSource.registerCustomer(
+      final user = await remoteDataSource.registerWorkshop(
         name: name,
         email: email,
         phone: phone,
         password: password,
         passwordConfirmation: passwordConfirmation,
-        isActive: isActive,
+        workshopName: workshopName,
+        workshopNameAr: workshopNameAr,
+        workshopAddress: workshopAddress,
+        workshopCity: workshopCity,
+        latitude: latitude,
+        longitude: longitude,
       );
       return Right(user);
     } catch (e) {
@@ -56,41 +64,6 @@ class AuthRepositoryImpl implements AuthRepository {
     }
   }
 
-  @override
-  Future<Either<String, UserModel>> registerCompany({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-    required String passwordConfirmation,
-    required String companyName,
-    required String companyNameAr,
-    required String commercialReg,
-    required String taxNumber,
-    required String companyAddress,
-    bool isActive = false,
-  }) async {
-    try {
-      final user = await remoteDataSource.registerCompany(
-        name: name,
-        email: email,
-        phone: phone,
-        password: password,
-        passwordConfirmation: passwordConfirmation,
-        companyName: companyName,
-        companyNameAr: companyNameAr,
-        commercialReg: commercialReg,
-        taxNumber: taxNumber,
-        companyAddress: companyAddress,
-        isActive: isActive,
-      );
-      return Right(user);
-    } catch (e) {
-      return Left(e.toString().replaceAll('Exception: ', ''));
-    }
-  }
-
-  
   @override
   Future<Either<String, String>> sendResetOtp({required String email}) async {
     try {
@@ -122,33 +95,32 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
-Future<Either<String, UserModel>> getProfile() async {
-  try {
-    final user = await remoteDataSource.getProfile();
-    return Right(user);
-  } catch (e) {
-    return Left(e.toString().replaceAll('Exception: ', ''));
+  Future<Either<String, UserModel>> getProfile() async {
+    try {
+      final user = await remoteDataSource.getProfile();
+      return Right(user);
+    } catch (e) {
+      return Left(e.toString().replaceAll('Exception: ', ''));
+    }
   }
-}
 
-@override
-Future<Either<String, UserModel>> updateProfile({
-  String? name,
-  String? email,
-  String? phone,
-  String? imagePath,
-}) async {
-  try {
-    final user = await remoteDataSource.updateProfile(
-      name: name,
-      email: email,
-      phone: phone,
-      imagePath: imagePath,
-    );
-    return Right(user);
-  } catch (e) {
-    return Left(e.toString().replaceAll('Exception: ', ''));
+  @override
+  Future<Either<String, UserModel>> updateProfile({
+    String? name,
+    String? email,
+    String? phone,
+    String? imagePath,
+  }) async {
+    try {
+      final user = await remoteDataSource.updateProfile(
+        name: name,
+        email: email,
+        phone: phone,
+        imagePath: imagePath,
+      );
+      return Right(user);
+    } catch (e) {
+      return Left(e.toString().replaceAll('Exception: ', ''));
+    }
   }
-}
-
 }

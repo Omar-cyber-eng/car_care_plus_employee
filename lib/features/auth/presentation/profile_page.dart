@@ -6,8 +6,6 @@ import 'package:car_care_plus/core/widgets/gradient_header.dart';
 import 'package:car_care_plus/features/auth/data/user_model.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
-import 'package:car_care_plus/features/auth/presentation/widgets/car_model.dart';
-import 'package:car_care_plus/features/company/ui/views/company_profile_view.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -263,26 +261,6 @@ class _ProfilePageState extends State<ProfilePage> {
                           value: user.email ?? 'غير متوفر',
                         ),
 
-                        // 🏢 قسم الشركة يظهر فقط لعميل الشركة
-                        if (user.role == 'customer_company') ...[
-                          const SizedBox(height: 28),
-                          Text(
-                            'الشركة',
-                            style: TextStyles.Size18
-                                .withColor(AppColors.darkBlueBlack)
-                                .withWeight(FontWeight.bold),
-                          ),
-                          const SizedBox(height: 10),
-                          _CompanySectionCard(
-                            onTap: () => Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CompanyProfileView(),
-                              ),
-                            ),
-                          ),
-                        ],
-
                         const SizedBox(height: 28),
                       ],
                     ),
@@ -294,76 +272,6 @@ class _ProfilePageState extends State<ProfilePage> {
 
           return const SizedBox.shrink();
         },
-      ),
-    );
-  }
-}
-
-class _CompanySectionCard extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _CompanySectionCard({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          gradient: AppColors.darkCardGradient,
-          borderRadius: BorderRadius.circular(18),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.darkBlueBlack.withOpacity(0.15),
-              blurRadius: 14,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: AppColors.primaryBlue.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: const Icon(
-                Icons.business_rounded,
-                color: AppColors.cyanAccent,
-                size: 24,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'ملف الشركة',
-                    style: TextStyles.Size15
-                        .withColor(AppColors.surfaceWhite)
-                        .withWeight(FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'عرض وتعديل بيانات شركتك',
-                    style: TextStyles.Size10.withColor(
-                      AppColors.surfaceWhite.withOpacity(0.7),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios_rounded,
-              size: 16,
-              color: AppColors.surfaceWhite.withOpacity(0.7),
-            ),
-          ],
-        ),
       ),
     );
   }

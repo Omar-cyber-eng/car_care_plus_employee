@@ -3,12 +3,7 @@ import 'package:car_care_plus/core/resources/text_style.dart';
 import 'package:car_care_plus/core/validatiors/app_validators.dart';
 import 'package:car_care_plus/core/widgets/customTextField.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:car_care_plus/core/routing/app_routes.dart';
-import 'package:car_care_plus/features/auth/presentation/cubit/auth_cubit.dart';
-import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
-import 'package:car_care_plus/features/auth/presentation/company_info_page.dart';
-import 'package:car_care_plus/features/auth/presentation/widgets/account_type_toggle.dart';
+import 'package:car_care_plus/features/auth/presentation/workshop_info_page.dart';
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});
@@ -28,27 +23,16 @@ class _RegisterPageState extends State<RegisterPage> {
 
   bool _obscurePassword = true;
   bool _obscureConfirmPassword = true;
-  AccountType _accountType = AccountType.individual;
 
-  void _register() {
-    if (_formKey.currentState!.validate()) {
-      context.read<AuthCubit>().registerCustomer(
-            name: _nameController.text.trim(),
-            email: _emailController.text.trim(),
-            phone: _phoneController.text.trim(),
-            password: _passwordController.text.trim(),
-            passwordConfirmation: _confirmPasswordController.text.trim(),
-          );
-    }
-  }
-
-  // حساب شركة: ننتقل لصفحة استكمال البيانات مع الاحتفاظ بالحقول المشتركة
-  void _goToCompanyInfo() {
+  // الورشة فقط هي التي تسجّل نفسها (وتنتظر اعتماد الأدمن).
+  // الموظف لا يسجّل — ينشئه الأدمن ويسجّل دخوله فقط.
+  // ننتقل لصفحة بيانات الورشة مع الاحتفاظ بحقول المستخدم المشتركة.
+  void _goToWorkshopInfo() {
     if (_formKey.currentState!.validate()) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => CompanyInfoPage(
+          builder: (_) => WorkshopInfoPage(
             name: _nameController.text.trim(),
             email: _emailController.text.trim(),
             phone: _phoneController.text.trim(),
@@ -76,7 +60,7 @@ class _RegisterPageState extends State<RegisterPage> {
       extendBodyBehindAppBar: true,
       appBar: AppBar(
         title: Text(
-          'إنشاء حساب جديد',
+          'تسجيل ورشة جديدة',
           style: TextStyles.Size18
               .withColor(AppColors.surfaceWhite)
               .withWeight(FontWeight.bold),
@@ -101,14 +85,6 @@ class _RegisterPageState extends State<RegisterPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const SizedBox(height: 10),
-
-                  // مبدّل نوع الحساب في رأس الصفحة
-                  AccountTypeToggle(
-                    value: _accountType,
-                    onChanged: (type) => setState(() => _accountType = type),
-                  ),
-
                   const SizedBox(height: 16),
 
                   // الشعار
@@ -132,17 +108,18 @@ class _RegisterPageState extends State<RegisterPage> {
                   const SizedBox(height: 24),
 
                   Text(
-                    "أهلاً بك معنا!",
+                    "أنشئ حساب ورشتك",
                     style: TextStyles.Size24
                         .withColor(AppColors.surfaceWhite)
                         .withWeight(FontWeight.bold),
                   ),
                   const SizedBox(height: 6),
                   Text(
-                    "قم بإنشاء حسابك للاستفادة من جميع الخدمات",
+                    "ابدأ ببيانات المسؤول، ثم أكمل معلومات الورشة",
                     style: TextStyles.Size15.withColor(
                       AppColors.surfaceWhite.withOpacity(0.8),
                     ),
+                    textAlign: TextAlign.center,
                   ),
 
                   const SizedBox(height: 28),
@@ -150,7 +127,7 @@ class _RegisterPageState extends State<RegisterPage> {
                   // حقل الاسم الكامل
                   CustomTextField(
                     controller: _nameController,
-                    label: 'الاسم الكامل',
+                    label: 'اسم المسؤول',
                     icon: Icons.person_outline,
                     validator: AppValidators.required,
                   ),
@@ -226,75 +203,37 @@ class _RegisterPageState extends State<RegisterPage> {
 
                   const SizedBox(height: 32),
 
-                  // زر إنشاء الحساب
-                  BlocConsumer<AuthCubit, AuthState>(
-                    listener: (context, state) {
-                      // تدفّق الشركة تتم معالجته في صفحة معلومات الشركة
-                      if (_accountType != AccountType.individual) return;
-                      if (state is AuthSuccess) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('تم إنشاء الحساب بنجاح!'),
-                            backgroundColor: AppColors.primaryBlue,
-                          ),
-                        );
-                        Navigator.pushNamedAndRemoveUntil(
-                          context,
-                          Routes.mainLayout,
-                          (route) => false,
-                        );
-                      } else if (state is AuthFailure) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(state.errorMessage),
-                            backgroundColor: AppColors.errorColor,
-                          ),
-                        );
-                      }
-                    },
-                    builder: (context, state) {
-                      return Container(
-                        width: double.infinity,
-                        height: 55,
-                        decoration: BoxDecoration(
+                  // زر الانتقال لبيانات الورشة
+                  Container(
+                    width: double.infinity,
+                    height: 55,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: AppColors.buttonGradient,
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primaryBlue.withOpacity(0.4),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: ElevatedButton(
+                      onPressed: _goToWorkshopInfo,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.transparent,
+                        shadowColor: Colors.transparent,
+                        shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(16),
-                          gradient: AppColors.buttonGradient,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.primaryBlue.withOpacity(0.4),
-                              blurRadius: 10,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
                         ),
-                        child: ElevatedButton(
-                          onPressed: state is AuthLoading
-                              ? null
-                              : (_accountType == AccountType.individual
-                                  ? _register
-                                  : _goToCompanyInfo),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.transparent,
-                            shadowColor: Colors.transparent,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          child: state is AuthLoading
-                              ? const CircularProgressIndicator(
-                                  color: AppColors.surfaceWhite,
-                                )
-                              : Text(
-                                  _accountType == AccountType.individual
-                                      ? 'إنشاء حساب'
-                                      : 'التالي',
-                                  style: TextStyles.Size18
-                                      .withColor(AppColors.surfaceWhite)
-                                      .withWeight(FontWeight.bold),
-                                ),
-                        ),
-                      );
-                    },
+                      ),
+                      child: Text(
+                        'التالي',
+                        style: TextStyles.Size18
+                            .withColor(AppColors.surfaceWhite)
+                            .withWeight(FontWeight.bold),
+                      ),
+                    ),
                   ),
 
                   const SizedBox(height: 24),

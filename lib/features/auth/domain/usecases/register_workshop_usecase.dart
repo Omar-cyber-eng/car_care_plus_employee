@@ -2,10 +2,10 @@ import 'package:car_care_plus/features/auth/data/user_model.dart';
 import 'package:dartz/dartz.dart';
 import '../repositories/auth_repository.dart';
 
-class RegisterCompanyUseCase {
+class RegisterWorkshopUseCase {
   final AuthRepository repository;
 
-  RegisterCompanyUseCase(this.repository);
+  RegisterWorkshopUseCase(this.repository);
 
   Future<Either<String, UserModel>> call({
     required String name,
@@ -13,23 +13,25 @@ class RegisterCompanyUseCase {
     required String phone,
     required String password,
     required String passwordConfirmation,
-    required String companyName,
-    required String companyNameAr,
-    required String commercialReg,
-    required String taxNumber,
-    required String companyAddress,
+    required String workshopName,
+    required String workshopNameAr,
+    required String workshopAddress,
+    required String workshopCity,
+    required String latitude,
+    required String longitude,
   }) {
-    return repository.registerCompany(
+    return repository.registerWorkshop(
       name: name,
       email: email,
       phone: phone,
       password: password,
       passwordConfirmation: passwordConfirmation,
-      companyName: companyName,
-      companyNameAr: companyNameAr,
-      commercialReg: commercialReg,
-      taxNumber: taxNumber,
-      companyAddress: companyAddress,
+      workshopName: workshopName,
+      workshopNameAr: workshopNameAr,
+      workshopAddress: workshopAddress,
+      workshopCity: workshopCity,
+      latitude: latitude,
+      longitude: longitude,
     );
   }
 }

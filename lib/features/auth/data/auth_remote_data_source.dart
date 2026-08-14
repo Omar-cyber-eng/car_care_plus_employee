@@ -1,32 +1,22 @@
-// lib/features/auth/data/auth_remote_data_source.dart
-
 import 'package:car_care_plus/features/auth/data/user_model.dart';
 import 'package:dio/dio.dart';
 
 abstract class AuthRemoteDataSource {
   Future<UserModel> login({required String email, required String password});
 
-  Future<UserModel> registerCustomer({
+  // تسجيل الورشة فقط (الموظف ينشئه الأدمن ويسجل دخوله فقط)
+  Future<UserModel> registerWorkshop({
     required String name,
     required String email,
     required String phone,
     required String password,
     required String passwordConfirmation,
-    bool isActive = true,
-  });
-
-  Future<UserModel> registerCompany({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-    required String passwordConfirmation,
-    required String companyName,
-    required String companyNameAr,
-    required String commercialReg,
-    required String taxNumber,
-    required String companyAddress,
-    bool isActive = false,
+    required String workshopName,
+    required String workshopNameAr,
+    required String workshopAddress,
+    required String workshopCity,
+    required String latitude,
+    required String longitude,
   });
 
   Future<String> sendResetOtp({required String email});
@@ -38,7 +28,6 @@ abstract class AuthRemoteDataSource {
     required String passwordConfirmation,
   });
 
-  // 🆕 Profile Abstract Methods
   Future<UserModel> getProfile();
 
   Future<UserModel> updateProfile({
@@ -56,27 +45,38 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
   AuthRemoteDataSourceImpl({required this.dio});
 
   @override
-  Future<UserModel> login({required String email, required String password}) async {
+  Future<UserModel> login({
+    required String email,
+    required String password,
+  }) async {
     try {
-      final response = await dio.post('$baseUrl/auth/login', data: {'email': email, 'password': password});
+      final response = await dio.post(
+        '$baseUrl/auth/login',
+        data: {'email': email, 'password': password},
+      );
       if (response.statusCode == 200 && response.data['status'] == 1) {
         return UserModel.fromJson(response.data);
       } else {
         throw Exception(response.data['message'] ?? 'فشل تسجيل الدخول');
       }
     } on DioException catch (e) {
-      throw Exception(e.response?.data['message'] ?? 'تعذر الاتصال بالسيرفر، تأكد من تشغيل Laravel');
+      throw Exception(e.response?.data['message'] ?? 'تعذر الاتصال بالسيرفر');
     }
   }
 
   @override
-  Future<UserModel> registerCustomer({
+  Future<UserModel> registerWorkshop({
     required String name,
     required String email,
     required String phone,
     required String password,
     required String passwordConfirmation,
-    bool isActive = true,
+    required String workshopName,
+    required String workshopNameAr,
+    required String workshopAddress,
+    required String workshopCity,
+    required String latitude,
+    required String longitude,
   }) async {
     try {
       final formData = FormData.fromMap({
@@ -85,48 +85,28 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         'phone': phone,
         'password': password,
         'password_confirmation': passwordConfirmation,
-        'is_active': isActive ? 1 : 0,
+        'workshop_name': workshopName,
+        'workshop_name_ar': workshopNameAr,
+        'workshop_address': workshopAddress,
+        'workshop_city': workshopCity,
+        'latitude': latitude,
+        'longitude': longitude,
       });
-      final response = await dio.post('$baseUrl/auth/register/customer', data: formData);
-      if ((response.statusCode == 200 || response.statusCode == 201) && response.data['status'] == 1) {
-        return UserModel.fromJson(response.data);
-      } else {
-        throw Exception(response.data['message'] ?? 'فشل إنشاء الحساب');
-      }
-    } on DioException catch (e) {
-      throw Exception(e.response?.data['message'] ?? 'تعذر الاتصال بالسيرفر، تأكد من تشغيل Laravel');
-    }
-  }
 
-  @override
-  Future<UserModel> registerCompany({
-    required String name,
-    required String email,
-    required String phone,
-    required String password,
-    required String passwordConfirmation,
-    required String companyName,
-    required String companyNameAr,
-    required String commercialReg,
-    required String taxNumber,
-    required String companyAddress,
-    bool isActive = false,
-  }) async {
-    try {
-      final response = await dio.post('$baseUrl/auth/register/company', data: {
-        'name': name, 'email': email, 'phone': phone,
-        'password': password, 'password_confirmation': passwordConfirmation,
-        'is_active': isActive, 'company_name': companyName,
-        'company_name_ar': companyNameAr, 'commercial_reg': commercialReg,
-        'tax_number': taxNumber, 'company_address': companyAddress,
-      });
-      if ((response.statusCode == 200 || response.statusCode == 201) && response.data['status'] == 1) {
+      final response = await dio.post(
+        '$baseUrl/auth/register/workshop',
+        data: formData,
+      );
+      if ((response.statusCode == 200 || response.statusCode == 201) &&
+          response.data['status'] == 1) {
         return UserModel.fromJson(response.data);
       } else {
-        throw Exception(response.data['message'] ?? 'فشل إنشاء حساب الشركة');
+        throw Exception(
+          response.data['message'] ?? 'فشل تقديم طلب تسجيل الورشة',
+        );
       }
     } on DioException catch (e) {
-      throw Exception(e.response?.data['message'] ?? 'تعذر الاتصال بالسيرفر، تأكد من تشغيل Laravel');
+      throw Exception(e.response?.data['message'] ?? 'تعذر الاتصال بالسيرفر');
     }
   }
 
@@ -138,7 +118,8 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
         data: {'email': email},
       );
       if (response.statusCode == 200 && response.data['status'] == 1) {
-        return response.data['message'] ?? 'تم إرسال رمز التحقق إلى بريدك الإلكتروني';
+        return response.data['message'] ??
+            'تم إرسال رمز التحقق إلى بريدك الإلكتروني';
       } else {
         throw Exception(response.data['message'] ?? 'فشل إرسال رمز التحقق');
       }
@@ -167,14 +148,15 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       if (response.statusCode == 200 && response.data['status'] == 1) {
         return response.data['message'] ?? 'تم إعادة تعيين كلمة المرور بنجاح';
       } else {
-        throw Exception(response.data['message'] ?? 'فشل إعادة تعيين كلمة المرور');
+        throw Exception(
+          response.data['message'] ?? 'فشل إعادة تعيين كلمة المرور',
+        );
       }
     } on DioException catch (e) {
       throw Exception(e.response?.data['message'] ?? 'تعذر الاتصال بالسيرفر');
     }
   }
 
-  // 🆕 Profile Implementation
   @override
   Future<UserModel> getProfile() async {
     try {
@@ -206,7 +188,10 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
       }
 
       final formData = FormData.fromMap(dataMap);
-      final response = await dio.post('$baseUrl/profile/updateProfile', data: formData);
+      final response = await dio.post(
+        '$baseUrl/profile/updateProfile',
+        data: formData,
+      );
 
       if (response.statusCode == 200 && response.data['status'] == 1) {
         return UserModel.fromJson(response.data);

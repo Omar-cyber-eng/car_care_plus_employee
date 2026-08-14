@@ -1,6 +1,4 @@
 import 'package:car_care_plus/features/auth/presentation/profile_page.dart';
-import 'package:car_care_plus/features/cars/ui/views/my_cars_view.dart';
-import 'package:car_care_plus/features/home/ui/views/home_view.dart';
 import 'package:car_care_plus/features/orders/presentation/orders_page.dart';
 import 'package:flutter/material.dart';
 import 'package:car_care_plus/core/resources/app_color.dart';
@@ -14,19 +12,15 @@ class MainLayout extends StatefulWidget {
 }
 
 class _MainLayoutState extends State<MainLayout> {
-  // نبدأ افتراضياً على الواجهة الرئيسية (Index 2)
-  int _currentIndex = 2;
+  // نبدأ افتراضياً على الطلبات (قلب فلو الموظف/الورشة)
+  int _currentIndex = 0;
 
   // الترتيب من اليمين لليسار (RTL):
-  // 0: حسابي (البروفايل)
-  // 1: الكراج (سياراتي)
-  // 2: الرئيسية
-  // 3: طلباتي
+  // 0: الطلبات
+  // 1: حسابي (البروفايل)
   final List<Widget> _pages = const [
-    ProfilePage(),
-    MyCarsView(),
-    HomeView(),
     OrdersPage(),
+    ProfilePage(),
   ];
 
   @override
@@ -61,24 +55,14 @@ class _MainLayoutState extends State<MainLayout> {
           unselectedLabelStyle: TextStyles.Size10,
           items: const [
             BottomNavigationBarItem(
+              icon: Icon(Icons.receipt_long_outlined),
+              activeIcon: Icon(Icons.receipt_long_rounded),
+              label: 'الطلبات',
+            ),
+            BottomNavigationBarItem(
               icon: Icon(Icons.person_outline_rounded),
               activeIcon: Icon(Icons.person_rounded),
               label: 'حسابي',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.directions_car_outlined),
-              activeIcon: Icon(Icons.directions_car_filled_rounded),
-              label: 'الكراج',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home_rounded),
-              label: 'الرئيسية',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.receipt_long_outlined),
-              activeIcon: Icon(Icons.receipt_long_rounded),
-              label: 'طلباتي',
             ),
           ],
         ),
