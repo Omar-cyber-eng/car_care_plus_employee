@@ -63,7 +63,7 @@ class _MyAppState extends State<MyApp> {
             localizationsDelegates: AppLocalizations.localizationsDelegates,
             supportedLocales: AppLocalizations.supportedLocales,
             // 🔗 استخدام الروت نيم هنا
-            initialRoute: Routes.register,
+            initialRoute: Routes.mainLayout,
             onGenerateRoute: _appRouter.generateRoute,
           ),
         );

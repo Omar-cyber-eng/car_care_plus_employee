@@ -22,6 +22,14 @@ class ApiConstants {
   // Company Endpoints
   static const String myCompany = 'companies/my'; // شركة المستخدم الحالي
   static const String company = 'companies/';      // تعديل: companies/{id}
+
+  // Orders (Bookings) Endpoints — تطبيق الورشة/الموظف
+  static const String bookings = 'bookings';                         // GET قائمة (مُصفّاة تلقائياً + مُرقّمة)
+  static String bookingDetails(int id) => 'bookings/$id';           // GET تفاصيل طلب
+  static String startBooking(int id) => 'bookings/$id/start';       // POST assigned → in_progress
+  static String completeBooking(int id) => 'bookings/$id/complete'; // POST in_progress → completed
+  static String confirmCash(int paymentId) =>
+      'payments/$paymentId/confirm-cash';                            // POST تأكيد نقد (بمعرّف الدفعة)
   // Cars Endpoints
 static const String userCars = 'cars/indexClient'; // جلب سيارات المستخدم
 static const String createCar = 'cars';             // إنشاء/إضافة سيارة جديدة (POST)
