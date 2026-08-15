@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:car_care_plus/core/networking/api_service.dart';
 import 'package:car_care_plus/core/resources/app_color.dart';
 import 'package:car_care_plus/core/resources/text_style.dart';
 import 'package:car_care_plus/features/orders/data/order_model.dart';
+import 'package:car_care_plus/features/orders/data/orders_repo.dart';
 
 // نموذج تفاصيل الخدمة الميدانية (صيانة/طريق/سحب).
-// ⚠️ وضع تجريبي: الحفظ يعرض رسالة فقط ولا يُرسل للباك بعد
-// (سيرتبط لاحقاً بـ POST /bookings/{id}/maintenance-detail | road-detail | towing-detail).
+// GET يجلب التفصيل الحالي (قد يعيد null) → prefill، وPOST يعمل upsert على order_id.
 class OrderServiceDetailPage extends StatefulWidget {
   final OrderServiceKind kind;
   final int orderId;
@@ -22,16 +23,24 @@ class OrderServiceDetailPage extends StatefulWidget {
 
 class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
   final _formKey = GlobalKey<FormState>();
+  final _repo = OrdersRepo(ApiService());
 
-  // حقول مشتركة/خاصة حسب النوع.
   final _notesController = TextEditingController();
   final _problemController = TextEditingController();
   final _diagnosisController = TextEditingController();
   final _destinationController = TextEditingController();
 
-  // أحجام السيارة (لطلبات الطريق/السحب).
   static const _carSizes = ['sedan', 'suv', 'hatchback', 'pickup'];
   String? _carSize;
+
+  bool _loading = true; // جلب التفصيل الحالي
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
 
   @override
   void dispose() {
@@ -42,16 +51,99 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _load() async {
+    try {
+      final data = await _repo.getServiceDetail(widget.orderId, widget.kind);
+      if (data != null) _prefill(data);
+    } catch (_) {
+      // نعرض نموذجاً فارغاً (قد يكون بلا تفاصيل بعد، أو تعذّر الجلب).
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  void _prefill(Map<String, dynamic> d) {
+    _carSize = (d['car_type_size'] as String?)?.trim().isNotEmpty == true
+        ? d['car_type_size'] as String?
+        : null;
+    switch (widget.kind) {
+      case OrderServiceKind.maintenance:
+        _notesController.text = (d['notes'] ?? '').toString();
+        break;
+      case OrderServiceKind.road:
+        _problemController.text = (d['problem_description'] ?? '').toString();
+        _diagnosisController.text = (d['ai_diagnosis'] ?? '').toString();
+        break;
+      case OrderServiceKind.towing:
+        _destinationController.text =
+            (d['destination_address'] ?? '').toString();
+        _notesController.text = (d['notes'] ?? '').toString();
+        break;
+      case OrderServiceKind.wash:
+        break;
+    }
+  }
+
+  Map<String, dynamic> _buildFields() {
+    final f = <String, dynamic>{};
+    String t(TextEditingController c) => c.text.trim();
+
+    switch (widget.kind) {
+      case OrderServiceKind.maintenance:
+        if (t(_notesController).isNotEmpty) f['notes'] = t(_notesController);
+        break;
+      case OrderServiceKind.road:
+        if (t(_problemController).isNotEmpty) {
+          f['problem_description'] = t(_problemController);
+        }
+        if (_carSize != null) f['car_type_size'] = _carSize;
+        if (t(_diagnosisController).isNotEmpty) {
+          f['ai_diagnosis'] = t(_diagnosisController);
+        }
+        break;
+      case OrderServiceKind.towing:
+        if (t(_destinationController).isNotEmpty) {
+          f['destination_address'] = t(_destinationController);
+        }
+        if (_carSize != null) f['car_type_size'] = _carSize;
+        if (t(_notesController).isNotEmpty) f['notes'] = t(_notesController);
+        break;
+      case OrderServiceKind.wash:
+        break;
+    }
+    return f;
+  }
+
+  Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final fields = _buildFields();
+    if (fields.isEmpty) {
+      _snack('أدخل بياناً واحداً على الأقل', AppColors.errorColor);
+      return;
+    }
+
+    setState(() => _saving = true);
+    try {
+      await _repo.saveServiceDetail(widget.orderId, widget.kind, fields);
+      if (!mounted) return;
+      _snack('تم حفظ التفاصيل بنجاح', AppColors.successColor);
+      Navigator.pop(context);
+    } catch (_) {
+      if (mounted) _snack('تعذّر حفظ التفاصيل، حاول مجدداً', AppColors.errorColor);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  void _snack(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('تم حفظ التفاصيل (وضع تجريبي — سيُرسل للباك لاحقاً)'),
-        backgroundColor: AppColors.successColor,
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
         behavior: SnackBarBehavior.floating,
       ),
     );
-    Navigator.pop(context);
   }
 
   @override
@@ -70,39 +162,54 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
               .withWeight(FontWeight.bold),
         ),
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-          children: [
-            ..._fieldsForKind(),
-            const SizedBox(height: 28),
-            SizedBox(
-              width: double.infinity,
-              height: 54,
-              child: ElevatedButton.icon(
-                onPressed: _save,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryBlue,
-                  foregroundColor: AppColors.surfaceWhite,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primaryBlue),
+            )
+          : Form(
+              key: _formKey,
+              child: ListView(
+                physics: const BouncingScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
+                children: [
+                  ..._fieldsForKind(),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 54,
+                    child: ElevatedButton.icon(
+                      onPressed: _saving ? null : _save,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primaryBlue,
+                        foregroundColor: AppColors.surfaceWhite,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      icon: _saving
+                          ? const SizedBox.shrink()
+                          : const Icon(Icons.save_outlined),
+                      label: _saving
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.5,
+                                color: AppColors.surfaceWhite,
+                              ),
+                            )
+                          : Text(
+                              'حفظ التفاصيل',
+                              style: TextStyles.Size18
+                                  .withColor(AppColors.surfaceWhite)
+                                  .withWeight(FontWeight.bold),
+                            ),
+                    ),
                   ),
-                ),
-                icon: const Icon(Icons.save_outlined),
-                label: Text(
-                  'حفظ التفاصيل',
-                  style: TextStyles.Size18
-                      .withColor(AppColors.surfaceWhite)
-                      .withWeight(FontWeight.bold),
-                ),
+                ],
               ),
             ),
-          ],
-        ),
-      ),
     );
   }
 
@@ -133,7 +240,6 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
             label: 'التشخيص',
             hint: 'تشخيص الفنّي للمشكلة...',
             maxLines: 4,
-            required: false,
           ),
         ];
       case OrderServiceKind.towing:
@@ -152,11 +258,9 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
             label: 'ملاحظات',
             hint: 'أي ملاحظات إضافية...',
             maxLines: 3,
-            required: false,
           ),
         ];
       case OrderServiceKind.wash:
-        // الغسيل لا يملك تفاصيل ميدانية — لا يُفترض الوصول لهذه الشاشة.
         return [
           Text(
             'لا توجد تفاصيل ميدانية لهذا النوع.',
@@ -171,7 +275,6 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
     required String label,
     required String hint,
     int maxLines = 1,
-    bool required = true,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -186,9 +289,6 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
         TextFormField(
           controller: controller,
           maxLines: maxLines,
-          validator: required
-              ? (v) => (v == null || v.trim().isEmpty) ? 'هذا الحقل مطلوب' : null
-              : null,
           decoration: InputDecoration(
             hintText: hint,
             filled: true,

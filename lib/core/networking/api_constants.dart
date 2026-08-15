@@ -30,6 +30,21 @@ class ApiConstants {
   static String completeBooking(int id) => 'bookings/$id/complete'; // POST in_progress → completed
   static String confirmCash(int paymentId) =>
       'payments/$paymentId/confirm-cash';                            // POST تأكيد نقد (بمعرّف الدفعة)
+
+  // تفاصيل ميدانية للميكانيكي — GET (قد يعيد null) + POST (upsert) على نفس المسار
+  static String maintenanceDetail(int orderId) =>
+      'bookings/$orderId/maintenance-detail';
+  static String roadDetail(int orderId) => 'bookings/$orderId/road-detail';
+  static String towingDetail(int orderId) => 'bookings/$orderId/towing-detail';
+
+  // كتالوج المواد (لاختيار material_id في قطع الغيار)
+  static const String materials = 'materials';
+
+  // قطع الغيار (الميكانيكي: إنشاء + عرض؛ الاعتماد على لوحة العميل)
+  static const String sparePartRequests = 'spare-part-requests';
+
+  // تقارير الموظف (غسّال+ميكانيكي إنشاء، +الورشة عرض)
+  static const String employeeReports = 'employee-reports';
   // Cars Endpoints
 static const String userCars = 'cars/indexClient'; // جلب سيارات المستخدم
 static const String createCar = 'cars';             // إنشاء/إضافة سيارة جديدة (POST)

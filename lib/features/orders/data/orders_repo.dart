@@ -45,4 +45,40 @@ class OrdersRepo {
   Future<void> confirmCash(int paymentId) async {
     await _apiService.post(endpoint: ApiConstants.confirmCash(paymentId));
   }
+
+  /// تفاصيل ميدانية (صيانة/طريق/سحب) — GET قد يعيد null إن لم تُنشأ بعد (200 وليس 404).
+  Future<Map<String, dynamic>?> getServiceDetail(
+    int orderId,
+    OrderServiceKind kind,
+  ) async {
+    final response =
+        await _apiService.get(endpoint: _detailEndpoint(orderId, kind));
+    final data = response.data['data'];
+    return data is Map<String, dynamic> ? data : null;
+  }
+
+  /// حفظ التفاصيل (upsert على order_id) — أرسل الحقول المُعبّأة فقط.
+  Future<void> saveServiceDetail(
+    int orderId,
+    OrderServiceKind kind,
+    Map<String, dynamic> fields,
+  ) async {
+    await _apiService.post(
+      endpoint: _detailEndpoint(orderId, kind),
+      data: fields,
+    );
+  }
+
+  String _detailEndpoint(int orderId, OrderServiceKind kind) {
+    switch (kind) {
+      case OrderServiceKind.maintenance:
+        return ApiConstants.maintenanceDetail(orderId);
+      case OrderServiceKind.road:
+        return ApiConstants.roadDetail(orderId);
+      case OrderServiceKind.towing:
+        return ApiConstants.towingDetail(orderId);
+      case OrderServiceKind.wash:
+        return ApiConstants.bookingDetails(orderId); // لا ينطبق عملياً
+    }
+  }
 }

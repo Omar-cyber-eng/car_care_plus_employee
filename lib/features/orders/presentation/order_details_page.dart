@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:car_care_plus/core/resources/app_color.dart';
 import 'package:car_care_plus/core/resources/text_style.dart';
+import 'package:car_care_plus/features/auth/presentation/cubit/auth_cubit.dart';
+import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
 import 'package:car_care_plus/features/orders/data/order_model.dart';
 import 'package:car_care_plus/features/orders/logic/orders_cubit.dart';
 import 'package:car_care_plus/features/orders/logic/orders_state.dart';
+import 'package:car_care_plus/features/orders/presentation/employee_report_page.dart';
 import 'package:car_care_plus/features/orders/presentation/order_service_detail_page.dart';
+import 'package:car_care_plus/features/orders/presentation/spare_parts_page.dart';
 
 class OrderDetailsPage extends StatelessWidget {
   final int orderId;
@@ -166,19 +170,69 @@ class _Actions extends StatelessWidget {
       ));
     }
 
-    // تفاصيل ميدانية للميكانيكي (صيانة/طريق/سحب)
-    if (order.kind.hasFieldDetails &&
-        order.status != OrderStatus.pending &&
+    // تفاصيل ميدانية للميكانيكي — الصيانة لها تفصيلها، والمساعدة على الطريق
+    // لها تفصيلان: مساعدة على الطريق + سحب (السحب حالة داخل Roadside).
+    if (order.status != OrderStatus.pending &&
         order.status != OrderStatus.cancelled) {
+      void openDetail(OrderServiceKind kind, String label) {
+        children.add(_OutlinedButton(
+          label: label,
+          icon: Icons.assignment_outlined,
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => OrderServiceDetailPage(
+                kind: kind,
+                orderId: order.id,
+              ),
+            ),
+          ),
+        ));
+      }
+
+      if (order.kind == OrderServiceKind.maintenance) {
+        openDetail(OrderServiceKind.maintenance, 'تفاصيل الصيانة');
+      } else if (order.kind == OrderServiceKind.road) {
+        openDetail(OrderServiceKind.road, 'تفاصيل المساعدة على الطريق');
+        openDetail(OrderServiceKind.towing, 'تفاصيل السحب');
+      }
+    }
+
+    // ميزات حسب الدور (قطع الغيار للميكانيكي، التقارير للموظفين+الورشة).
+    final authState = context.read<AuthCubit>().state;
+    final role = authState is AuthSuccess ? authState.user.role : null;
+    final isMechanic = role == 'employee_mechanic';
+    final isEmployee = isMechanic || role == 'employee_washer';
+    final isWorkshop = role == 'workshop';
+    final orderIsOpen = order.status != OrderStatus.completed &&
+        order.status != OrderStatus.cancelled;
+
+    if (isMechanic) {
       children.add(_OutlinedButton(
-        label: 'تفاصيل ${order.kind.label}',
-        icon: Icons.assignment_outlined,
+        label: 'قطع الغيار',
+        icon: Icons.settings_suggest_outlined,
         onTap: () => Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => OrderServiceDetailPage(
-              kind: order.kind,
+            builder: (_) => SparePartsPage(
               orderId: order.id,
+              orderIsOpen: orderIsOpen,
+            ),
+          ),
+        ),
+      ));
+    }
+
+    if (isEmployee || isWorkshop) {
+      children.add(_OutlinedButton(
+        label: 'تقارير الموظف',
+        icon: Icons.description_outlined,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => EmployeeReportPage(
+              orderId: order.id,
+              canCreate: isEmployee,
             ),
           ),
         ),
