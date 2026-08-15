@@ -3,10 +3,11 @@ import 'package:car_care_plus/core/resources/text_style.dart';
 import 'package:car_care_plus/core/validatiors/app_validators.dart';
 import 'package:car_care_plus/core/widgets/customTextField.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
+import 'package:car_care_plus/features/auth/presentation/location_picker_page.dart';
 import 'package:car_care_plus/features/auth/presentation/pending_approval_page.dart';
 
 class WorkshopInfoPage extends StatefulWidget {
@@ -38,42 +39,48 @@ class _WorkshopInfoPageState extends State<WorkshopInfoPage> {
   final TextEditingController _workshopAddressController =
       TextEditingController();
   final TextEditingController _workshopCityController = TextEditingController();
-  final TextEditingController _latitudeController = TextEditingController();
-  final TextEditingController _longitudeController = TextEditingController();
 
-  void _submitWorkshop() {
-    if (_formKey.currentState!.validate()) {
-      context.read<AuthCubit>().registerWorkshop(
-            name: widget.name,
-            email: widget.email,
-            phone: widget.phone,
-            password: widget.password,
-            passwordConfirmation: widget.passwordConfirmation,
-            workshopName: _workshopNameController.text.trim(),
-            workshopNameAr: _workshopNameArController.text.trim(),
-            workshopAddress: _workshopAddressController.text.trim(),
-            workshopCity: _workshopCityController.text.trim(),
-            latitude: _latitudeController.text.trim(),
-            longitude: _longitudeController.text.trim(),
-          );
+  // موقع الورشة المُختار من الخريطة (إلزامي).
+  LatLng? _selectedLocation;
+
+  Future<void> _pickLocation() async {
+    final result = await Navigator.push<LatLng>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => LocationPickerPage(initialLocation: _selectedLocation),
+      ),
+    );
+    if (result != null) {
+      setState(() => _selectedLocation = result);
     }
   }
 
-  // تحقّق من الإحداثيات (رقم عشري ضمن المدى الجغرافي)
-  String? _validateCoordinate(
-    String? value, {
-    required double min,
-    required double max,
-  }) {
-    final requiredError = AppValidators.required(value);
-    if (requiredError != null) return requiredError;
+  void _submitWorkshop() {
+    if (!_formKey.currentState!.validate()) return;
 
-    final parsed = double.tryParse(value!.trim());
-    if (parsed == null) return 'أدخل رقماً صحيحاً';
-    if (parsed < min || parsed > max) {
-      return 'القيمة يجب أن تكون بين $min و $max';
+    if (_selectedLocation == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('يرجى تحديد موقع الورشة على الخريطة'),
+          backgroundColor: AppColors.errorColor,
+        ),
+      );
+      return;
     }
-    return null;
+
+    context.read<AuthCubit>().registerWorkshop(
+          name: widget.name,
+          email: widget.email,
+          phone: widget.phone,
+          password: widget.password,
+          passwordConfirmation: widget.passwordConfirmation,
+          workshopName: _workshopNameController.text.trim(),
+          workshopNameAr: _workshopNameArController.text.trim(),
+          workshopAddress: _workshopAddressController.text.trim(),
+          workshopCity: _workshopCityController.text.trim(),
+          latitude: _selectedLocation!.latitude.toStringAsFixed(7),
+          longitude: _selectedLocation!.longitude.toStringAsFixed(7),
+        );
   }
 
   @override
@@ -82,8 +89,6 @@ class _WorkshopInfoPageState extends State<WorkshopInfoPage> {
     _workshopNameArController.dispose();
     _workshopAddressController.dispose();
     _workshopCityController.dispose();
-    _latitudeController.dispose();
-    _longitudeController.dispose();
     super.dispose();
   }
 
@@ -185,59 +190,10 @@ class _WorkshopInfoPageState extends State<WorkshopInfoPage> {
                   ),
                   const SizedBox(height: 16),
 
-                  // الإحداثيات (إلزامية حسب الباك-إند)
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: CustomTextField(
-                          controller: _latitudeController,
-                          label: 'خط العرض (Latitude)',
-                          icon: Icons.my_location_outlined,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'[0-9.\-]'),
-                            ),
-                          ],
-                          validator: (v) =>
-                              _validateCoordinate(v, min: -90, max: 90),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: CustomTextField(
-                          controller: _longitudeController,
-                          label: 'خط الطول (Longitude)',
-                          icon: Icons.explore_outlined,
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                            signed: true,
-                          ),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(
-                              RegExp(r'[0-9.\-]'),
-                            ),
-                          ],
-                          validator: (v) =>
-                              _validateCoordinate(v, min: -180, max: 180),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 8),
-                  Align(
-                    alignment: AlignmentDirectional.centerStart,
-                    child: Text(
-                      'تجدها في تطبيق الخرائط بالضغط المطوّل على موقع الورشة',
-                      style: TextStyles.Size10.withColor(
-                        AppColors.surfaceWhite.withOpacity(0.7),
-                      ),
-                    ),
+                  // موقع الورشة على الخريطة (إلزامي)
+                  _LocationField(
+                    location: _selectedLocation,
+                    onTap: _pickLocation,
                   ),
 
                   const SizedBox(height: 28),
@@ -306,6 +262,70 @@ class _WorkshopInfoPageState extends State<WorkshopInfoPage> {
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// حقل اختيار الموقع: زر يفتح الخريطة، ويعرض الإحداثيات بعد الاختيار.
+class _LocationField extends StatelessWidget {
+  final LatLng? location;
+  final VoidCallback onTap;
+
+  const _LocationField({required this.location, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasLocation = location != null;
+
+    return Material(
+      color: AppColors.surfaceWhite.withOpacity(0.92),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
+          child: Row(
+            children: [
+              Icon(
+                hasLocation
+                    ? Icons.check_circle_rounded
+                    : Icons.add_location_alt_outlined,
+                color: AppColors.primaryBlue,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasLocation
+                          ? 'تم تحديد موقع الورشة'
+                          : 'تحديد موقع الورشة على الخريطة',
+                      style: TextStyles.Size15
+                          .withColor(AppColors.darkBlueBlack)
+                          .withWeight(FontWeight.w600),
+                    ),
+                    if (hasLocation) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '${location!.latitude.toStringAsFixed(6)}, '
+                        '${location!.longitude.toStringAsFixed(6)}',
+                        style: TextStyles.Size10.withColor(AppColors.coolGrey),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Icon(
+                hasLocation ? Icons.edit_location_alt_outlined : Icons.map_outlined,
+                color: AppColors.primaryBlue,
+                size: 20,
+              ),
+            ],
           ),
         ),
       ),
