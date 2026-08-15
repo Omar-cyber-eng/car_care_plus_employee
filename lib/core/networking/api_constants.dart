@@ -45,6 +45,9 @@ class ApiConstants {
 
   // تقارير الموظف (غسّال+ميكانيكي إنشاء، +الورشة عرض)
   static const String employeeReports = 'employee-reports';
+
+  // التقييمات (عرض فقط للموظف/الورشة)
+  static const String ratings = 'ratings';
   // Cars Endpoints
 static const String userCars = 'cars/indexClient'; // جلب سيارات المستخدم
 static const String createCar = 'cars';             // إنشاء/إضافة سيارة جديدة (POST)

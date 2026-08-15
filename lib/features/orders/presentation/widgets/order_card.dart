@@ -86,7 +86,7 @@ class OrderCard extends StatelessWidget {
                   ),
                 ),
                 Text(
-                  '${order.price.toStringAsFixed(0)} ر.س',
+                  '${order.price.toStringAsFixed(0)} ل.س',
                   style: TextStyles.Size15
                       .withColor(AppColors.primaryBlue)
                       .withWeight(FontWeight.bold),

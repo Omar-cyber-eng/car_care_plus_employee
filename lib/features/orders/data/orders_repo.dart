@@ -1,5 +1,6 @@
 import 'package:car_care_plus/core/networking/api_constants.dart';
 import 'package:car_care_plus/core/networking/api_service.dart';
+import 'package:car_care_plus/features/orders/data/customer_car_model.dart';
 import 'package:car_care_plus/features/orders/data/order_model.dart';
 
 // طبقة بيانات الطلبات — تضرب /bookings (Scoping تلقائي من الباك حسب الدور).
@@ -67,6 +68,13 @@ class OrdersRepo {
       endpoint: _detailEndpoint(orderId, kind),
       data: fields,
     );
+  }
+
+  /// تفاصيل سيارة العميل (قراءة فقط) — GET /cars/show/{id} (متاح لكل الأدوار).
+  Future<CustomerCar> getCustomerCar(int carId) async {
+    final response =
+        await _apiService.get(endpoint: '${ApiConstants.showCar}$carId');
+    return CustomerCar.fromJson(response.data['data'] as Map<String, dynamic>);
   }
 
   String _detailEndpoint(int orderId, OrderServiceKind kind) {

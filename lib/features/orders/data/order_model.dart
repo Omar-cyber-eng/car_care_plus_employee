@@ -97,6 +97,7 @@ class PaymentModel {
 // موديل الطلب = OrderResource (القسم 11.1 من دليل الورشة/الموظف).
 class OrderModel {
   final int id;
+  final int carId;
   final OrderServiceKind kind;
   final String serviceName;
   final String customerName;
@@ -112,6 +113,7 @@ class OrderModel {
 
   const OrderModel({
     required this.id,
+    required this.carId,
     required this.kind,
     required this.serviceName,
     required this.customerName,
@@ -135,6 +137,7 @@ class OrderModel {
 
     return OrderModel(
       id: json['id'] ?? 0,
+      carId: (car?['id'] ?? json['car_id'] ?? 0) as int,
       kind: _kindFromCategory(category?['name']?.toString()),
       serviceName: (service?['name_ar'] ??
               service?['name'] ??

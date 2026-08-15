@@ -7,6 +7,7 @@ import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
 import 'package:car_care_plus/features/orders/data/order_model.dart';
 import 'package:car_care_plus/features/orders/logic/orders_cubit.dart';
 import 'package:car_care_plus/features/orders/logic/orders_state.dart';
+import 'package:car_care_plus/features/orders/presentation/customer_car_page.dart';
 import 'package:car_care_plus/features/orders/presentation/employee_report_page.dart';
 import 'package:car_care_plus/features/orders/presentation/order_service_detail_page.dart';
 import 'package:car_care_plus/features/orders/presentation/spare_parts_page.dart';
@@ -118,7 +119,7 @@ class OrderDetailsPage extends StatelessWidget {
                       icon: Icons.payments_outlined,
                       label: 'السعر / الدفع',
                       value:
-                          '${order.price.toStringAsFixed(0)} ر.س • ${order.paymentLabel}',
+                          '${order.price.toStringAsFixed(0)} ل.س • ${order.paymentLabel}',
                     ),
                   ],
                 ),
@@ -169,6 +170,18 @@ class _Actions extends StatelessWidget {
         },
       ));
     }
+
+    // عرض سيارة العميل (قراءة فقط) — متاح لكل الأدوار.
+    children.add(_OutlinedButton(
+      label: 'عرض سيارة العميل',
+      icon: Icons.directions_car_outlined,
+      onTap: () => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => CustomerCarPage(carId: order.carId),
+        ),
+      ),
+    ));
 
     // تفاصيل ميدانية للميكانيكي — الصيانة لها تفصيلها، والمساعدة على الطريق
     // لها تفصيلان: مساعدة على الطريق + سحب (السحب حالة داخل Roadside).

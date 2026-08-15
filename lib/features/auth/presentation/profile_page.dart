@@ -6,6 +6,7 @@ import 'package:car_care_plus/core/widgets/gradient_header.dart';
 import 'package:car_care_plus/features/auth/data/user_model.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
+import 'package:car_care_plus/features/ratings/presentation/ratings_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -262,6 +263,26 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
 
                         const SizedBox(height: 28),
+                        Text(
+                          'المزيد',
+                          style: TextStyles.Size18
+                              .withColor(AppColors.darkBlueBlack)
+                              .withWeight(FontWeight.bold),
+                        ),
+                        const SizedBox(height: 10),
+                        _ActionTile(
+                          icon: Icons.star_rounded,
+                          label: 'التقييمات',
+                          subtitle: 'التقييمات التي تلقّيتها',
+                          onTap: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const RatingsPage(),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 28),
                       ],
                     ),
                   ),
@@ -272,6 +293,72 @@ class _ProfilePageState extends State<ProfilePage> {
 
           return const SizedBox.shrink();
         },
+      ),
+    );
+  }
+}
+
+class _ActionTile extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.surfaceWhite,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                decoration: BoxDecoration(
+                  color: AppColors.lightBlueSurface,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(icon, color: AppColors.primaryBlue, size: 24),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyles.Size15
+                          .withColor(AppColors.darkBlueBlack)
+                          .withWeight(FontWeight.w600),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyles.Size10.withColor(AppColors.coolGrey),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 16,
+                color: AppColors.coolGrey,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
