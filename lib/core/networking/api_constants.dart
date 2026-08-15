@@ -52,6 +52,9 @@ class ApiConstants {
   // الورشة (دور workshop): ملف ورشتي + تعديلها
   static const String myWorkshop = 'workshops/my';
   static String workshop(int id) => 'workshops/$id';
+
+  // سجلّات GPS (الموظف: إرسال فقط أثناء التنفيذ — GET يرجع 403 فلا نقرأها)
+  static const String gpsLogs = 'gps-logs';
   // Cars Endpoints
 static const String userCars = 'cars/indexClient'; // جلب سيارات المستخدم
 static const String createCar = 'cars';             // إنشاء/إضافة سيارة جديدة (POST)

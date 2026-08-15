@@ -11,6 +11,7 @@ import 'package:car_care_plus/features/orders/presentation/customer_car_page.dar
 import 'package:car_care_plus/features/orders/presentation/employee_report_page.dart';
 import 'package:car_care_plus/features/orders/presentation/order_service_detail_page.dart';
 import 'package:car_care_plus/features/orders/presentation/spare_parts_page.dart';
+import 'package:car_care_plus/features/orders/presentation/widgets/gps_tracker.dart';
 
 class OrderDetailsPage extends StatelessWidget {
   final int orderId;
@@ -55,6 +56,11 @@ class OrderDetailsPage extends StatelessWidget {
             );
           }
 
+          final authState = context.read<AuthCubit>().state;
+          final role = authState is AuthSuccess ? authState.user.role : null;
+          final isEmployee =
+              role == 'employee_mechanic' || role == 'employee_washer';
+
           return SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
@@ -65,6 +71,12 @@ class OrderDetailsPage extends StatelessWidget {
                 const SizedBox(height: 16),
                 _StatusTimeline(status: order.status),
                 const SizedBox(height: 16),
+                // متتبّع GPS — يُرسل الموقع تلقائياً للموظف أثناء التنفيذ.
+                GpsTracker(
+                  orderId: order.id,
+                  active:
+                      order.status == OrderStatus.inProgress && isEmployee,
+                ),
                 _SectionCard(
                   title: 'العميل',
                   rows: [
