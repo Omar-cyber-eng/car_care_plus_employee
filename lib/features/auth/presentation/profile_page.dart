@@ -7,6 +7,7 @@ import 'package:car_care_plus/features/auth/data/user_model.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_cubit.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_state.dart';
 import 'package:car_care_plus/features/ratings/presentation/ratings_page.dart';
+import 'package:car_care_plus/features/workshop/presentation/workshop_profile_page.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -270,6 +271,20 @@ class _ProfilePageState extends State<ProfilePage> {
                               .withWeight(FontWeight.bold),
                         ),
                         const SizedBox(height: 10),
+                        if (user.role == 'workshop') ...[
+                          _ActionTile(
+                            icon: Icons.home_repair_service_rounded,
+                            label: 'ملف الورشة',
+                            subtitle: 'عرض وتعديل بيانات ورشتك',
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const WorkshopProfilePage(),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         _ActionTile(
                           icon: Icons.star_rounded,
                           label: 'التقييمات',

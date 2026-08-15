@@ -48,6 +48,10 @@ class ApiConstants {
 
   // التقييمات (عرض فقط للموظف/الورشة)
   static const String ratings = 'ratings';
+
+  // الورشة (دور workshop): ملف ورشتي + تعديلها
+  static const String myWorkshop = 'workshops/my';
+  static String workshop(int id) => 'workshops/$id';
   // Cars Endpoints
 static const String userCars = 'cars/indexClient'; // جلب سيارات المستخدم
 static const String createCar = 'cars';             // إنشاء/إضافة سيارة جديدة (POST)
