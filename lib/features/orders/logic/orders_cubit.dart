@@ -23,6 +23,19 @@ class OrdersCubit extends Cubit<OrdersState> {
     }
   }
 
+  /// تحديث صامت (بلا سبينر) — للاستطلاع الدوري بديلاً عن الإشعارات.
+  Future<void> refreshSilently() async {
+    try {
+      final orders = await _repo.getOrders();
+      _orders
+        ..clear()
+        ..addAll(orders);
+      emit(OrdersLoaded(List.of(_orders)));
+    } catch (_) {
+      // نتجاهل — نُبقي القائمة الحالية.
+    }
+  }
+
   // assigned → in_progress
   Future<bool> startOrder(int id) =>
       _runAction(() => _repo.startOrder(id));
@@ -48,6 +61,17 @@ class OrdersCubit extends Cubit<OrdersState> {
   OrderModel? orderById(int id) {
     final index = _orders.indexWhere((o) => o.id == id);
     return index == -1 ? null : _orders[index];
+  }
+
+  /// يجلب تفاصيل الطلب الكاملة (بها payments والعلاقات) ويستبدل عنصر القائمة —
+  /// لأن قائمة /bookings قد ترجع موديلاً مختصراً بلا payments.
+  Future<void> loadOrderDetails(int id) async {
+    try {
+      final full = await _repo.getOrderDetails(id);
+      _replace(full);
+    } catch (_) {
+      // نُبقي عنصر القائمة كما هو (تبقى الشاشة تعرض الملخّص).
+    }
   }
 
   Future<bool> _runAction(Future<OrderModel> Function() call) async {

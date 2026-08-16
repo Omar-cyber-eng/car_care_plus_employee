@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:car_care_plus/core/resources/app_color.dart';
@@ -32,10 +34,31 @@ class _OrdersPageState extends State<OrdersPage> {
 
   String _filterLabel(OrderStatus? f) => f == null ? 'الكل' : f.label;
 
+  late final OrdersCubit _cubit;
+  Timer? _pollTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _cubit = OrdersCubit(OrdersRepo(ApiService()))..loadOrders();
+    // استطلاع دوري صامت (بديل الإشعارات — لا push في الباك بعد).
+    _pollTimer = Timer.periodic(
+      const Duration(seconds: 45),
+      (_) => _cubit.refreshSilently(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    _cubit.close();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (_) => OrdersCubit(OrdersRepo(ApiService()))..loadOrders(),
+    return BlocProvider.value(
+      value: _cubit,
       child: Scaffold(
         backgroundColor: AppColors.lightBlueSurface,
         body: Column(

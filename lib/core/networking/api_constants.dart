@@ -49,9 +49,11 @@ class ApiConstants {
   // التقييمات (عرض فقط للموظف/الورشة)
   static const String ratings = 'ratings';
 
-  // الورشة (دور workshop): ملف ورشتي + تعديلها
+  // الورشة (دور workshop): ملف ورشتي + تعديلها + سجل صيانة سيارة
   static const String myWorkshop = 'workshops/my';
   static String workshop(int id) => 'workshops/$id';
+  static String workshopCarHistory(int carId) =>
+      'workshops/cars/$carId/history';
 
   // سجلّات GPS (الموظف: إرسال فقط أثناء التنفيذ — GET يرجع 403 فلا نقرأها)
   static const String gpsLogs = 'gps-logs';

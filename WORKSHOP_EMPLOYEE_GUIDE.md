@@ -1,651 +1,284 @@
-# دليل تطبيق الورشة والموظف (تطبيق منفصل) — الباك-إند والمسارات والتدفّق
+# دليل تطبيق الورشة والموظف — المرجع الشامل (كل الـ APIs + الفلو + ملاحظات الفرونت)
 
-> **هذا التطبيق منفصل عن تطبيق العميل، ومخصّص لثلاثة أدوار فقط:**
-> `workshop` (مالك ورشة) · `employee_washer` (غسّال) · `employee_mechanic` (ميكانيكي).
->
-> ⛔ **الأدمن والسوبر أدمن لا دخل لهما بهذا التطبيق** — لهما لوحة تحكّم منفصلة (Dashboard).
-> كل ما يخص assign / المخزون / المحافظ / إدارة العملاء = لوحة الأدمن، **ليست هنا**.
->
-> كل الردود بالغلاف الموحّد `{status,data,message,status_code,timestamp}`، ومحميّة بـ Bearer token.
+> **تطبيق منفصل لثلاثة أدوار فقط:** `workshop` (ورشة) · `employee_washer` (غسّال) · `employee_mechanic` (ميكانيكي).
+> ⛔ **الأدمن والسوبر أدمن خارج هذا التطبيق كلياً** (لوحة منفصلة). لا يوجد "موظف admin" في تطبيقك — نوع
+> `admin` هو مدير فرع ويعمل على لوحة الأدمن.
+> Base URL: `/api` · كل الطلبات محميّة بـ `Authorization: Bearer <token>` + `Accept: application/json`.
+> كل رد بالغلاف الموحّد: `{ status, data, message, status_code, timestamp }` (`status`: 1 نجاح / 0 فشل).
 
----
-
-# 0) ⚠️ توضيح حاسم: "الأدمن" مقابل "الموظف من نوع admin" — **هما نفس الشيء**
-
-هذا مصدر اللبس، وإليك الحقيقة من الكود بدقة:
-
-- في النظام **دور admin واحد فقط**، ومعناه: **مدير فرع** (Branch Manager).
-- عندما ينشئ السوبر أدمن موظفاً، يختار `type` من: `washer` / `mechanic` / **`admin`**.
-- الـ enum `EmployeeType` يربط كل نوع بدور (role):
-  - `washer` → دور `employee_washer`
-  - `mechanic` → دور `employee_mechanic`
-  - `admin` → دور **`admin`** (وليس دوراً باسم "employee_admin" — لا وجود لهذا).
-- عند اختيار `type=admin`، الكود:
-  1. يُسند للمستخدم دور **`admin`** (Spatie role).
-  2. يُنشئ له سجل `employees` بنوع `admin` (لهذا يبدو "موظفاً").
-  3. يعيّنه مديراً للفرع (`branches.admin_id = user->id`).
-
-**الخلاصة:** «الموظف من نوع admin» و«الأدمن الذي تحت السوبر أدمن» = **كيان واحد تماماً**، وهو **مدير الفرع**.
-لا يوجد دوران منفصلان. ومدير الفرع هذا **مُستبعَد من تطبيقك** (يعمل على لوحة الأدمن).
-
-| النوع عند الإنشاء | الدور الناتج            | داخل هذا التطبيق؟   |
-| ----------------- | ----------------------- | ------------------- |
-| `washer`          | `employee_washer`       | ✅ نعم              |
-| `mechanic`        | `employee_mechanic`     | ✅ نعم              |
-| `admin`           | `admin` (مدير فرع)      | ❌ لا (لوحة الأدمن) |
-| —                 | `workshop` (يسجّل نفسه) | ✅ نعم              |
-
-> إذاً تطبيقك = **workshop + washer + mechanic** فقط. تجاهل أي شيء يخص `admin`/`super_admin`.
+هذا الملف مُعاد كتابته بالكامل بعد فحص الروتس والصلاحيات الحالية (آخر تحديثات: enums، firebase، spare parts، car history).
 
 ---
 
-# 1) الدخول والهوية (مشترك للأدوار الثلاثة)
+# 1) الدخول والهوية
 
-- **الدخول:** `POST /api/auth/login` → يرجع المستخدم + `token` (إن كان الحساب نشطاً).
-- **الخروج:** `POST /api/auth/logout`.
-- ميّز الدور من `data.role`:
-  ```dart
-  // 'workshop' | 'employee_washer' | 'employee_mechanic'
-  final role = user.role;
-  ```
-- **الورشة تسجّل نفسها** (وتنتظر اعتماد السوبر أدمن) — انظر القسم 2.
-- **الموظف (washer/mechanic) لا يسجّل نفسه** — ينشئه السوبر أدمن، ثم يسجّل الدخول بحسابه. لا شاشة تسجيل للموظف.
-- ⚠️ لو الحساب `is_active=false` (ورشة لم تُعتمد بعد) → معظم المسارات تحجبه بـ **403 "Your account is inactive."** — عالجها كحالة "قيد المراجعة".
+| العملية | المسار | ملاحظات |
+|---|---|---|
+| دخول | `POST /api/auth/login` | يرجع المستخدم + `token` (إن كان الحساب نشطاً) |
+| خروج | `POST /api/auth/logout` | |
 
----
+- ميّز الدور من `data.role`: `workshop` / `employee_washer` / `employee_mechanic`.
+- **الورشة تسجّل نفسها** (`POST /api/auth/register/workshop`) وتنتظر اعتماد السوبر أدمن → لا token، `is_active=false`.
+  الحقول: `name, email, phone?, password(+confirmation), image_url?` + `workshop_name, workshop_name_ar, workshop_address, workshop_city, latitude, longitude`.
+- **الموظف (غسّال/ميكانيكي) لا يسجّل نفسه** — ينشئه السوبر أدمن؛ في تطبيقك يسجّل الدخول فقط.
+- ⚠️ حساب غير نشط (ورشة لم تُعتمد) → **403 "Your account is inactive."** → اعرض "قيد المراجعة".
 
-# 2) الورشة (Workshop)
-
-## 2.1 التسجيل والاعتماد
-
-- `POST /api/auth/register/workshop` — تسجيل معلّق (لا token، `is_active=false`, `status=pending`).
-- **الحقول:** بيانات المستخدم (`name`, `email`, `phone?`, `password`+`password_confirmation`, `image_url?`)
-  - بيانات الورشة: `workshop_name`, `workshop_name_ar`, `workshop_address`, `workshop_city`,
-    `latitude`, `longitude` (الإحداثيات إلزامية).
-- بعد التسجيل: شاشة "طلبك قيد المراجعة". السوبر أدمن يعتمد (من لوحته)، ثم يصبح الحساب نشطاً ويدخل.
-
-## 2.2 كيان الورشة (WorkshopResource)
-
-```json
-{
-  "id": 4, "name": "Speed Fix", "name_ar": "الإصلاح السريع",
-  "address": "...", "city": "Riyadh",
-  "latitude": "24.7136000", "longitude": "46.6753000",
-  "status": "approved",        // pending|approved|rejected|active|inactive|suspended
-  "rating_avg": "4.50",
-  "distance_km": 3.2,          // فقط في نتائج nearby
-  "owner": { ... } | null,
-  "created_at": "2026-08-01"
-}
-```
-
-## 2.3 مسارات الورشة المتاحة لدور `workshop`
-
-| العملية       | المسار                     | ملاحظات                                      |
-| ------------- | -------------------------- | -------------------------------------------- |
-| **ملف ورشتي** | `GET /api/workshops/my`    | ⭐ الأساس                                    |
-| عرض ورشة      | `GET /api/workshops/{id}`  | ورشته فقط (وإلا 403)                         |
-| تعديل ورشتي   | `POST /api/workshops/{id}` | المالك ورشته فقط                             |
-| قائمة الورش   | `GET /api/workshops`       | متاح (`show.workshops`) لكن نادراً ما تحتاجه |
-
-> ⛔ **ليست للورشة:** إنشاء ورشة (`POST /workshops` سوبر أدمن)، حذف (سوبر أدمن).
-
-## 2.4 ما تراه الورشة من الطلبات (Scoping)
-
-الورشة ترى **الطلبات المرتبطة بورشتها** فقط: `orders.workshop_id = ورشتي`
-(يُضبط `workshop_id` عندما يختار العميل هذه الورشة عبر `/workshops/nearby` أثناء الحجز).
+**حسابات تجريبية جاهزة** (كلمة المرور `password123`): `washer@system.com` · `mechanic@system.com` · `workshop@system.com`.
 
 ---
 
-# 3) الموظف: الغسّال (washer) والميكانيكي (mechanic)
+# 2) مرجع سريع: من يصل ماذا (مصفوفة الصلاحيات)
 
-## 3.1 الإنشاء
+✅ = متاح · ❌ = يرجع 403. مبني على صلاحيات الأدوار الفعلية.
 
-- ينشئهم السوبر أدمن فقط عبر `POST /api/admin/employees` (من لوحته) — **لا يخص تطبيقك**.
-- بياناتهم: `name`, `email`, `phone`, `password`, `branch_id`, `type` (`washer`/`mechanic`).
-- في تطبيقك: يسجّلون الدخول فقط عبر `login`.
-
-## 3.2 كيان الموظف (EmployeeResource)
-
-```json
-{ "id": 9, "branch_id": 1, "type": "washer", "is_active": true,
-  "rating_avg": "4.20", "user": { ... } | null }
-```
-
-## 3.3 ما يراه الموظف من الطلبات (Scoping)
-
-الموظف يرى **الطلبات المسندة إليه فقط**: `orders.employee_id = أنا`.
-
-## 3.4 الفرق بين الغسّال والميكانيكي
-
-- **الغسّال:** خدمات الغسيل. يعرض/يبدأ/ينهي طلباته، يدير سجلّات مواد الطلب، يؤكّد الدفع النقدي، ينشئ تقارير.
-- **الميكانيكي:** كل ما سبق + تفاصيل الصيانة والمساعدة على الطريق والسحب، المشاكل المقترحة،
-  محادثة الذكاء الاصطناعي، طلبات قطع الغيار (بعض هذه بلا مسارات بعد — القسم 6).
-
----
-
-# 4) تدفّق الطلب (Order Lifecycle) — قلب التطبيق
-
-```
-pending → assigned → in_progress → completed
-```
-
-| الانتقال             | المسار                             | مَن يقوم به في تطبيقك                                       |
-| -------------------- | ---------------------------------- | ----------------------------------------------------------- |
-| assign (إسناد لموظف) | `POST /api/bookings/{id}/assign`   | ⛔ **الأدمن/السوبر أدمن فقط** (خارج تطبيقك)                 |
-| **start** (بدء)      | `POST /api/bookings/{id}/start`    | ✅ الموظف/الورشة (`edit.order`) — ينقل assigned→in_progress |
-| **complete** (إنهاء) | `POST /api/bookings/{id}/complete` | ✅ الموظف/الورشة — ينقل in_progress→completed               |
-| تعديل الطلب          | `POST /api/bookings/{id}`          | ✅ الموظف/الورشة (`edit.order`)                             |
-
-⚠️ **تبعية مهمة جداً:** خطوة **الإسناد (assign)** صلاحيتها للأدمن فقط ولا يوجد لها مسار في نطاق هذا التطبيق.
-أي: **الطلبات تصل الموظف بعد أن يُسندها الأدمن من لوحته**. تطبيقك يبدأ من الطلبات التي حالتها `assigned`
-فما بعد. (إن كان مطلوباً أن تُسند الورشة الطلبات لموظفيها مستقبلاً، فهذه ميزة غير موجودة بعد — راجع الباك.)
-
-## 4.1 قائمة الطلبات وتفاصيلها (مشترك — مع Scoping تلقائي)
-
-- `GET /api/bookings` — قائمة طلباتي (مُصفّاة تلقائياً: الموظف→المسندة له، الورشة→طلبات ورشتها). **مُرقّمة صفحات** (`data.data` + `data.meta`).
-- `GET /api/bookings/{id}` — تفاصيل طلب.
-
-## 4.2 تفاصيل الطلب الفرعية (⚠️ للموظف، **ليست للورشة**)
-
-هذه صلاحياتها "للجميع عدا الورشة":
-| المسار | الغسّال | الميكانيكي | الورشة |
+| الميزة / المسار | غسّال | ميكانيكي | ورشة |
 |---|:---:|:---:|:---:|
-| `GET /bookings/{id}/status-history` | ✅ | ✅ | ❌ |
-| `GET /bookings/{id}/price-items` | ✅ | ✅ | ❌ |
-| `GET /bookings/{id}/sub-services` | ✅ | ✅ | ❌ |
-| `GET /bookings/{id}/materials` | ✅ | ✅ | ❌ |
+| `GET /bookings` (قائمتي، مُصفّاة) | ✅ | ✅ | ✅ |
+| `GET /bookings/{id}` | ✅ | ✅ | ✅ |
+| `POST /bookings/{id}/start` · `/complete` · (update) | ✅ | ✅ | ✅ |
+| `bookings/{id}/status-history · price-items · sub-services · materials` (GET) | ✅ | ✅ | ❌ |
+| `GET/POST bookings/{id}/maintenance-detail` | ❌ | ✅ | ✅ |
+| `GET/POST bookings/{id}/road-detail` | ❌ | ✅ | ✅ |
+| `GET/POST bookings/{id}/towing-detail` (+`/destination`) | ❌ | ✅ | ❌ |
+| `POST /payments/{paymentId}/confirm-cash` | ✅ | ✅ | ❌ |
+| `GET /payments/{id}` | ✅ | ✅ | ❌ |
+| `spare-part-requests` (create + list + show) | ❌ | ✅ | ❌ |
+| `employee-reports` (create) | ✅ | ✅ | ❌ |
+| `employee-reports` (list + show) | ✅ | ✅ | ✅ |
+| `POST /gps-logs` (إرسال) | ✅ | ✅ | ❌ |
+| `GET /gps-logs` (قراءة) | ❌ | ❌ | ❌ |
+| `GET /suggested-problems` | ❌ | ✅ | ❌ |
+| `GET /workshops/my` · `{id}` · `POST /workshops/{id}` | — | — | ✅ |
+| `GET /workshops/cars/{car}/history` | ❌ | ❌ | ✅ |
+| `GET /workshops/nearby` | ✅ | ✅ | ✅ |
+| `GET /indexClient` · `/show/{id}` (سيارات/سيارة) | ✅ | ✅ | جزئياً¹ |
+| الكتالوج (`categories/services/sub-services/car-types/car-brands/materials`) | ✅ | ✅ | ✅ |
+| `GET /enums` · `profile/*` | ✅ | ✅ | ✅ |
 
-## 4.3 التفاصيل الميدانية (صيانة/طريق/سحب)
+¹ الورشة تملك `show.car` (تفاصيل سيارة `GET /show/{id}`) لكن **لا** `show.client.cars` (قائمة `/indexClient`).
 
-| المسار                                       | الغسّال | الميكانيكي | الورشة |
-| -------------------------------------------- | :-----: | :--------: | :----: |
-| `GET/POST /bookings/{id}/maintenance-detail` |   ❌    |     ✅     |   ✅   |
-| `GET/POST /bookings/{id}/road-detail`        |   ❌    |     ✅     |   ✅   |
-| `GET/POST /bookings/{id}/towing-detail`      |   ❌    |     ✅     |   ❌   |
+---
 
-## 4.4 تفاصيل الصيانة/الطريق/السحب بالتفصيل (جوهر عمل الميكانيكي)
+# 3) فلو الطلب (Order Lifecycle) — جوهر التطبيق
 
-سلوك مشترك للثلاثة، مهم جداً:
-
-- **`GET`** يجلب التفصيل الحالي، وقد يرجع **`data: null`** إذا لم يُنشأ بعد (200 وليس 404). عالج null بعرض نموذج فارغ.
-- **`POST`** يعمل **upsert** (updateOrCreate على `order_id`): يُنشئ التفصيل إن لم يوجد، ويحدّثه إن وُجد.
-  فمسار واحد يكفي للإنشاء والتعديل معاً — لا تحتاج تمييزهما.
-- كل الحقول **اختيارية/جزئية** — أرسل ما تعبّئه فقط.
-- الصلاحية للكتابة: الطلب يجب أن تملكه/تديره (الموظف المسنَد أو الورشة صاحبة الطلب)، وإلا 403.
-
-### أ) تفاصيل الصيانة — `maintenance-detail` (ميكانيكي + ورشة)
-
-**الرد (MaintenanceDetailResource):**
-
-```json
-{ "id": 3, "order_id": 33, "workshop_id": 4,
-  "workshop": { ... } | null, "notes": "تم فحص المحرك...",
-  "created_at": "2026-08-10T..." }
+```
+pending → assigned → in_progress → completed        (+ cancelled)
 ```
 
-**حقول POST:** `workshop_id?` (int، ورشة موجودة)، `notes?` (نص ≤ 5000). بسيط: ملاحظات فنّية + ربط بورشة.
+| الانتقال | المسار | body | مَن + الشرط |
+|---|---|---|---|
+| إسناد لموظف | `POST /bookings/{id}/assign` | — | ⛔ **الأدمن فقط** (خارج تطبيقك). يحتاج `pending` |
+| **بدء** | `POST /bookings/{id}/start` | لا | الموظف/الورشة. يحتاج الحالة **`assigned`** |
+| **إنهاء** | `POST /bookings/{id}/complete` | لا | الموظف/الورشة. يحتاج الحالة **`in_progress`** |
 
-### ب) تفاصيل المساعدة على الطريق — `road-detail` (ميكانيكي + ورشة)
+- الانتقالات **مرتّبة وإجبارية ومحروسة** (قفزة/رجوع → خطأ). كلٌّ يرجع `OrderResource` بعد التحديث.
+- ⚠️ **الإسناد خارج نطاق تطبيقك:** الطلبات تصل الموظف **بعد** إسناد الأدمن؛ تطبيقك يبدأ من `assigned`.
+- **Scoping تلقائي** (لا ترسل أي فلتر هوية): الموظف يرى `employee_id = أنا`، والورشة ترى `workshop_id = ورشتي`.
+- ⚠️ **قائمة `GET /bookings` مُرقّمة صفحات:** العناصر في `data.data`، ومعلومات الصفحات في `data.meta`.
 
-هذا الأغنى، وغالباً **يكون منشأً مسبقاً** لأن العميل يملأه عند حجز المساعدة على الطريق؛ الميكانيكي **يُكمّله/يعدّله** (خصوصاً التشخيص).
-**الرد (RoadAssistanceDetailResource):**
-
-```json
-{ "id": 5, "order_id": 40,
-  "problem_type_id": 2, "problem_type": { ... } | null,
-  "car_type_size": "suv",                 // sedan|suv|hatchback|pickup
-  "problem_description": "البطارية فارغة",
-  "problem_image_url": "https://...",
-  "ai_diagnosis": "يُرجّح تلف البطارية",   // ⭐ حقل التشخيص الذي يكتبه الميكانيكي
-  "ai_chat_log": [ ... ],                  // سجلّ محادثة الذكاء (عرض فقط هنا)
-  "created_at": "2026-08-10T..." }
-```
-
-**حقول POST:** `problem_type_id?`، `car_type_size?` (enum: sedan/suv/hatchback/pickup)،
-`problem_description?` (≤5000)، `problem_image_url?` (URL)، `ai_diagnosis?` (≤5000).
-
-> ⚠️ `ai_chat_log` **عرض فقط** (ليس ضمن حقول POST). و`problem_type_id` عادةً مضبوط من إنشاء الحجز؛
-> مصدر قائمة أنواع المشاكل للميكانيكي هو `/suggested-problems` (المتاح له)، لا `/problem-types`.
-
-### ج) تفاصيل السحب — `towing-detail` (ميكانيكي فقط)
-
-**الرد (TowingDetailResource):**
-
-```json
-{
-  "id": 2,
-  "order_id": 40,
-  "car_type_size": "pickup",
-  "destination_lat": "24.77",
-  "destination_lng": "46.68",
-  "destination_address": "ورشة كذا - حي كذا",
-  "notes": "...",
-  "created_at": "2026-08-10T..."
-}
-```
-
-**حقول POST:** `car_type_size?` (enum)، `destination_lat?` (-90..90)، `destination_lng?` (-180..180)،
-`destination_address?` (≤1000)، `notes?` (≤5000). أي: وجهة السحب على الخريطة + ملاحظات.
-
-### مثال ربط (dio) — نمط GET ثم POST (upsert)
-
-```dart
-// تحميل التفصيل (قد يعود null)
-final res = await dio.get('/bookings/$orderId/road-detail');
-final detail = res.data['data']; // null إن لم يُنشأ بعد
-
-// حفظ (إنشاء أو تعديل — نفس المسار)
-await dio.post('/bookings/$orderId/road-detail', data: {
-  'ai_diagnosis': diagnosisText,
-  if (imageUrl != null) 'problem_image_url': imageUrl,
-});
-```
+## 3.1 علاقة الدفع بالفلو — **مساران مستقلّان، لا ترتيب بينهما**
+- حالة الطلب (`assigned→in_progress→completed`) **مرتّبة**.
+- تأكيد الدفع النقدي **مستقلّ تماماً**: يشترط فقط دفعة `cash` حالتها `pending` — **لا يشترط اكتمال الطلب**.
+- يمكن تأكيد النقد أثناء `in_progress` أو بعد `completed` — لا فرق.
+- 👈 في الواجهة: اجعل زرّي (start/complete) و(تأكيد النقد) **مستقلّين**، كلٌّ بشرطه.
 
 ---
 
-# 5) بقية المسارات المتاحة لكل دور (مرجع الربط)
+# 4) شكل الطلب (OrderResource) — الأهم للفرونت
 
-### مشترك للأدوار الثلاثة
-
-- **البروفايل:** `GET /api/profile/showProfile` · `POST /api/profile/updateProfile`
-- **الكتالوج (قراءة):** `/categories`, `/services` (+`/categories/{id}/services`), `/sub-services`
-  (+`/services/{id}/sub-services`), `/car-types`, `/car-brands`
-- **المواد:** `GET /api/materials`, `/materials/{id}`
-- **السيارة:** `GET /api/show/{id}` (تفاصيل سيارة الطلب)
-- **التقييمات (عرض):** `GET /api/ratings`, `/ratings/{id}`
-- **ورش قريبة:** `GET /api/workshops/nearby`
-
-### الغسّال + الميكانيكي (وليس الورشة)
-
-- **سيارات العميل:** `GET /api/indexClient` (`show.client.cars`)
-- **الدفع النقدي:** `GET /api/payments/{id}` · `POST /api/payments/{id}/confirm-cash` (تأكيد استلام النقد ميدانياً)
-- **قوائم مساعدة:** `/material-units`, `/pricing-rules`, `/pricing-rule-types`
-
-### الميكانيكي فقط
-
-- **المشاكل المقترحة:** `GET /api/suggested-problems`, `/suggested-problems/{id}`
-
-### الورشة فقط
-
-- مسارات الورشة (القسم 2.3) + التفاصيل الميدانية (صيانة/طريق).
-
-> ⛔ لا يملك أي من الثلاثة: النقاط، المحافظ، الباقات، إدارة العملاء، الفروع (`/branches`)، الشركات،
-> `/bookings/quote|confirm` (إنشاء الحجز للعميل)، assign، أو أي مسار إدارة (store/update/delete للكتالوج).
-
----
-
-# 6) ⚠️ ميزات لها صلاحيات لكن **بلا مسارات بعد** (لا تبنِها الآن)
-
-هذه معرّفة كصلاحيات للورشة/الموظف لكن **لا يوجد لها endpoints** في `routes/api.php` (تأكّدت بالفحص).
-أي استدعاء لها غير ممكن حالياً — جهّز مكانها في الواجهة فقط، وانتظر ربط الباك:
-
-| الميزة                                   | الصلاحية (بلا مسار)                               | لمن                                         |
-| ---------------------------------------- | ------------------------------------------------- | ------------------------------------------- |
-| **إدارة موظفي الورشة** (إضافة/تعديل/عرض) | `add.employee`, `edit.employee`, `show.employees` | الورشة                                      |
-| **تقارير الموظف** (إنشاء/عرض)            | `create.employee_report`, `show.employee_reports` | washer/mechanic/workshop                    |
-| **طلبات قطع الغيار** (إنشاء/اعتماد/رفض)  | `create/approve/reject.spare_part_request`        | mechanic ينشئ، workshop يعتمد               |
-| **سجلّات GPS**                           | `manage.gps_logs`                                 | washer/mechanic                             |
-| **إدارة مواد الطلب** (كتابة)             | `manage.order_materials`                          | washer/mechanic                             |
-| **سِجِل صيانة السيارة للورشة**           | `show.car_service_history`                        | workshop (المسار **معطّل/مُعلّق** في الروت) |
-| **محادثة الذكاء الاصطناعي**              | `manage.ai_chat`                                  | mechanic                                    |
-
-> ملاحظة: هذا يعني أن جزءاً من "عمل الموظف الميداني" (التقارير، قطع الغيار، GPS، كتابة المواد)
-> **غير جاهز على مستوى الـ API** — لا تعتمد عليه في الإصدار الأول، وأكّد مع فريق الباك موعد إتاحته.
-
----
-
-# 7) خريطة الشاشات المقترحة لكل دور
-
-### تطبيق الورشة (`workshop`)
-
-1. تسجيل ورشة → شاشة "قيد المراجعة" → دخول بعد الاعتماد.
-2. **ملف الورشة** (`/workshops/my` + تعديل).
-3. **طلبات ورشتي** (`/bookings` مُصفّاة) → تفاصيل → بدء/إنهاء → تعبئة تفاصيل الصيانة/الطريق.
-4. التقييمات (عرض)، الكتالوج (مرجع).
-5. (لاحقاً عند توفّر الـ API) إدارة الفنّيين، اعتماد قطع الغيار، تقارير الموظفين.
-
-### تطبيق الموظف (`washer` / `mechanic`)
-
-1. دخول فقط (لا تسجيل).
-2. **طلباتي المسندة** (`/bookings`) → تفاصيل الطلب + سجلّ الحالة + البنود + الخدمات الفرعية + المواد.
-3. **بدء/إنهاء** الطلب.
-4. الميكانيكي: تعبئة تفاصيل الصيانة/الطريق/السحب + المشاكل المقترحة.
-5. **تأكيد الدفع النقدي** عند الاستلام (`confirm-cash`).
-6. عرض سيارة العميل (`/show/{id}`, `/indexClient`).
-7. (لاحقاً) تقارير الموظف، طلبات قطع الغيار، GPS، كتابة المواد.
-
----
-
-# 8) قواعد ثابتة عند الربط
-
-1. **الأدمن والسوبر أدمن خارج هذا التطبيق كلياً** — لا تبنِ لهما شيئاً، ولا "موظف admin".
-2. **assign خارج نطاقك** — الطلبات تصل الموظف بعد إسناد الأدمن؛ تطبيقك يبدأ من `assigned`.
-3. **Scoping تلقائي:** لا ترسل فلاتر هوية — الباك يصفّي (الموظف→المسند له، الورشة→ورشتها).
-4. **قائمة الطلبات مُرقّمة صفحات** (`data.data` + `data.meta`).
-5. **بعض ميزات الموظف بلا API بعد** (القسم 6) — لا تعتمد عليها.
-6. **الأخطاء موحّدة:** 401 (توكن)، 403 (صلاحية/ملكية/حساب غير نشط)، 404، 422 (تحقّق مع `data` = خريطة حقول).
-7. **decimal كنصوص** (`rating_avg`, الإحداثيات, الأسعار) — حوّلها لأرقام. والعلاقات `whenLoaded` قد تكون null.
-
----
-
----
-
-# 9) 🔧 متطلبات الفرونت من الباك-إند (طلب موجّه لفريق الباك)
-
-> هذا القسم يكتبه فريق الفرونت (Claude) ليحدّد **بدقة** ما يحتاجه لإكمال ربط تطبيق
-> الموظف/الورشة. شاشات الطلبات مبنيّة حالياً **ببيانات وهمية** (mock) بانتظار هذه النقاط.
-> الرجاء توفير ما يلي (والأهم = ⭐).
-
-## 9.1 ⭐ شكل استجابة `GET /bookings` و`GET /bookings/{id}` (BookingResource)
-
-هذا **الحاجز الأساسي**. لبناء موديل الطلب الحقيقي نحتاج أسماء الحقول الفعلية وأنواعها.
-الحقول التي يعرضها/يحتاجها الفرونت في القائمة والتفاصيل:
-
-| ما نحتاجه في الواجهة | الحقل المتوقّع (أكّد الاسم الفعلي)                         | ملاحظات                                                                    |
-| -------------------- | ---------------------------------------------------------- | -------------------------------------------------------------------------- |
-| رقم الطلب            | `id`                                                       |                                                                            |
-| **الحالة**           | `status`                                                   | القيم: `pending`/`assigned`/`in_progress`/`completed`/`cancelled` — أكّدها |
-| **نوع الخدمة**       | ؟ (`service_kind`? / عبر `category`/`service`?)            | نميّز به: غسيل/صيانة/مساعدة طريق/سحب — **كيف نستخرجه؟**                    |
-| اسم الخدمة           | `service.name` / `sub_service`                             |                                                                            |
-| اسم العميل + هاتفه   | `customer.name`, `customer.phone`                          | تظهر للموظف ميدانياً                                                       |
-| السيارة              | `car.model`/`car.name`, `car.plate_number`, `car.car_type` |                                                                            |
-| الموقع/العنوان       | `address` + (`latitude`,`longitude`?)                      | لعرضه وربما فتح خريطة لاحقاً                                               |
-| الموعد               | `scheduled_at` / `created_at`                              | تنسيق التاريخ؟                                                             |
-| السعر                | `total_price` / `price`                                    | مع العملة                                                                  |
-| **طريقة الدفع**      | `payment_method`                                           | `cash`/`card`/`wallet`/`point`/`package` — يحدّد ظهور زر تأكيد النقد       |
-| حالة الدفع           | `payment_status`                                           | لتحديد هل النقد مؤكّد                                                      |
-| الموظف/الورشة        | `employee_id`, `workshop_id`                               | (Scoping تلقائي، للعرض فقط)                                                |
-
-**المطلوب:** ألصق لنا **عيّنة JSON حقيقية** لاستجابة `/bookings` (عنصر واحد كامل) + توضيح
-**كيف نميّز نوع الخدمة** (غسيل/صيانة/طريق/سحب) من الاستجابة.
-
-## 9.2 تأكيد أفعال دورة حياة الطلب (شكل الطلب والرد)
-
-مبنيّة في الواجهة، نحتاج فقط تأكيد الـ body والرد:
-
-- `POST /bookings/{id}/start` — هل يحتاج body؟ ماذا يرجع؟
-- `POST /bookings/{id}/complete` — نفس السؤال.
-- `POST /payments/{id}/confirm-cash` — الـ body؟ وهل يشترط أن يكون الطلب `completed` أم يكفي `in_progress`؟
-- تفاصيل الميكانيكي `maintenance-detail`/`road-detail`/`towing-detail`: الحقول موثّقة في القسم 4.4 —
-  فقط أكّد أنها نهائية.
-
-## 9.3 ⭐ بيانات تجريبية مطلوبة في قاعدة البيانات (Seed) — ليجرّب الفرونت
-
-لا نستطيع اختبار الدخول ولا الطلبات بلا حسابات وبيانات جاهزة. الرجاء إنشاء:
-
-**حسابات (مع email + password نعرفها):**
-
-- موظف **غسّال** (`type=washer` → دور `employee_washer`) **نشط**، مربوط بفرع.
-- موظف **ميكانيكي** (`type=mechanic` → دور `employee_mechanic`) **نشط**.
-- **ورشة** (`workshop`) **معتمدة** (`status=approved`, `is_active=true`) مع مالك.
-
-**بيانات مرتبطة:**
-
-- **ورشة واحدة** معتمدة على الأقل (بإحداثيات) مربوطة بمالك الورشة أعلاه.
-- **عملاء + سيارات** (عميل باسم/هاتف، وسيارة بموديل/لوحة) لتظهر في الطلبات.
-- **طلبات (bookings) متنوّعة** تغطّي:
-  - الحالات: `assigned`, `in_progress`, `completed` (وواحد `cancelled` إن أمكن).
-  - الأنواع: غسيل، صيانة، مساعدة على الطريق، سحب.
-  - الإسناد: بعضها **مُسند للموظف الغسّال**، وبعضها **للميكانيكي**، وبعضها **لطلبات الورشة**
-    (`workshop_id` = ورشتنا) — لنتحقّق من الـ Scoping التلقائي لكل دور.
-
-## 9.4 أسئلة مفتوحة (وموجّهة لمن)
-
-| السؤال                                                                                                 | موجّه لـ               |
-| ------------------------------------------------------------------------------------------------------ | ---------------------- |
-| كيف نميّز **نوع الخدمة** (غسيل/صيانة/طريق/سحب) من BookingResource؟ حقل مباشر أم عبر category/service؟  | Backend lead           |
-| هل ستُسند **الورشة** الطلبات لموظفيها مستقبلاً؟ (حالياً assign بيد الأدمن فقط — القسم 4)               | Backend lead / Product |
-| زر **تأكيد النقد**: يظهر عند `in_progress` أم فقط بعد `completed`؟                                     | Backend                |
-| **العملة** المعتمدة للعرض (ر.س؟) ومصدرها (ثابتة أم من الإعداد)؟                                        | Backend / Product      |
-| موعد إتاحة الميزات **بلا API** (القسم 6): تقارير الموظف، قطع الغيار، GPS، كتابة مواد الطلب، محادثة AI؟ | Backend lead           |
-| هل هناك **إشعارات** (push) عند إسناد طلب جديد للموظف؟ الآلية؟                                          | Backend / Mobile       |
-
-> بمجرّد توفّر **9.1** (عيّنة BookingResource) و**9.3** (بيانات Seed)، يستبدل الفرونت الـ mock
-> بربط فعلي خلال وقت قصير (الهيكل والتنقّل جاهزان).
-
-## 10.0 اخر رد من claude front-end
-
-تمّ إنجاز «الباقي» بالكامل. 0 أخطاء ترجمة في المشروع.
-
-1. شاشة الطلبات — الهيكل الكامل ببيانات وهمية (شكل + تنقّل)
-
-بنيت ميزة الطلبات بنمط المشروع (Cubit في الذاكرة، جاهز للاستبدال بـ API لاحقاً):
-
-order_model.dart — موديل غني + OrderStatus (pending/assigned/inProgress/completed/cancelled) + OrderServiceKind (غسيل/صيانة/طريق/سحب) + طريقة الدفع + بيانات وهمية متنوّعة.
-orders_cubit.dart + orders_state.dart — منطق وهمي: loadOrders / startOrder / completeOrder / confirmCash.
-orders_page.dart — القائمة + فلتر بالحالة (الكل/مُسند/قيد التنفيذ/مكتمل) + تحميل/فراغ/خطأ + سحب للتحديث.
-order_details_page.dart — تفاصيل كاملة (عميل/سيارة/خدمة/موقع/سعر) + خط زمني للحالة + أفعال الفلو حسب الحالة:
-مُسند → بدء التنفيذ
-قيد التنفيذ → إنهاء الطلب
-للميكانيكي (صيانة/طريق/سحب) → تفاصيل الخدمة
-دفع نقدي → تأكيد استلام النقد
-order_service_detail_page.dart — نموذج تفاصيل الميكانيكي (يتكيّف: صيانة/طريق/سحب) — حفظ تجريبي.
-
-التنقّل يعمل بالكامل والحالات تتحدّث حيّاً (start/complete/confirm تنعكس في القائمة والتفاصيل).
-
-2. توثيق متطلبات الباك — القسم 9 في WORKSHOP_EMPLOYEE_GUIDE.md
-
-أضفت قسماً منفصلاً بنهاية الملف يطلب من فريق الباك:
-
-⭐ 9.1 شكل استجابة /bookings (BookingResource) الفعلي + كيف نميّز نوع الخدمة.
-9.2 تأكيد body/رد أفعال start/complete/confirm-cash.
-⭐ 9.3 بيانات Seed للتجريب: حسابات (غسّال + ميكانيكي + ورشة معتمدة مع email/password) + عملاء/سيارات + طلبات متنوّعة (حالات وأنواع مختلفة، مسندة لكل دور).
-9.4 أسئلة مفتوحة مع تحديد الجهة الموجّه لها (Backend lead / Product / Mobile).
-
-ملاحظات
-لم أرفع على الريبو (أنت من يقرّر متى) ولم أشغّل build/تجريب (كما طلبت — analyze فقط، نظيف).
-بمجرّد أن يزوّدك الباك بـ 9.1 + 9.3، الاستبدال من mock إلى ربط فعلي سيكون سريعاً (الهيكل والتنقّل جاهزان).
-
----
-
-# 11) ✅ ردّ الباك-إند على القسم 9 (بيانات حقيقية من الكود بعد التحديث)
-
-> كتبه فريق الباك (Claude) بعد فحص الكود الفعلي عقب سحب التحديثات. كل ما يلي مؤكَّد من المصدر.
-
-## ما استجدّ في هذا التحديث (مهم للورشة/الموظف)
-
-- **`OrderResource` توسّع كثيراً:** أُضيفت `workshop_id` + `workshop`، وتفصيل الأسعار
-  (`service_price`, `sub_service_price`, `materials_price`, `package_covered_amount`, `cash_due_amount`)،
-  والباقة (`user_package_id` + `user_package`)، وقوائم `sub_services` و`materials` و`price_items`.
-- **بيانات الـ Seed أصبحت موجودة** (كانت غائبة) — حسابات + ورش + 40 طلباً. تفاصيلها في 11.3.
-- الميزات بلا مسارات (القسم 6) **ما زالت بلا مسارات** — لا جديد فيها.
-
-## 11.1 ⭐ شكل `GET /bookings` / `/bookings/{id}` = **OrderResource** (اسمه Order لا Booking)
-
-العلاقات التالية **مُحمّلة تلقائياً** في القائمة والتفاصيل (لا حاجة لطلبها):
+العلاقات المُحمّلة تلقائياً في `/bookings` و`/bookings/{id}`:
 `customer, car, branch, workshop, employee.user, service, category, priceItems, subServices.subService, materials.material, payments, userPackage.package`.
 
-عيّنة JSON فعلية (عنصر واحد):
-
 ```json
 {
-  "id": 12,
-  "booking_group_id": "uuid-...",
+  "id": 12, "booking_group_id": "uuid-...",
   "customer_id": 5, "customer": { "id":5, "name":"أحمد", "phone":"05..." },
-  "company_id": null,
-  "car_id": 8, "car": { "id":8, "model":"Corolla", "plate_number":"ABC-1234", "car_type": {...} },
-  "branch_id": 1, "branch": { ... },
-  "workshop_id": null, "workshop": { ... } | null,
-  "employee_id": 9, "employee": { "id":9, "type":"washer", "rating_avg":"5.00", "user": {...} },
-  "service_id": 1, "service": { "id":1, "name":"Exterior Wash", "name_ar":"غسيل خارجي", "base_price":"50.00", "duration_minutes":30 },
-  "category_id": 1, "category": { "id":1, "name":"Car Wash", "name_ar":"غسيل سيارات" },
-  "booking_type": true,          // ⚠️ true=فوري، false=مجدول (ليس نوع الخدمة!)
+  "car_id": 8, "car": { "model":"Corolla", "plate_number":"ABC-1234", "car_type": {...} },
+  "branch_id": 1, "branch": {...},
+  "workshop_id": null, "workshop": {...}|null,
+  "employee_id": 9, "employee": { "type":"washer", "rating_avg":"5.00", "user": {...} },
+  "service_id": 1, "service": { "name":"Exterior Wash", "name_ar":"غسيل خارجي", "base_price":"50.00", "duration_minutes":30 },
+  "category_id": 1, "category": { "name":"Car Wash", "name_ar":"غسيل سيارات" },
+  "booking_type": true,          // ⚠️ true=فوري / false=مجدول (ليس نوع الخدمة)
   "is_vip": false,
   "status": "assigned",          // pending|assigned|in_progress|completed|cancelled
-  "scheduled_at": "2026-08-15T10:00:00+00:00",
-  "started_at": null, "completed_at": null, "cancelled_at": null, "cancel_reason": null,
-  "assigned_at": "2026-08-14T...",
-  "location_lat": "24.7136000", "location_lng": "46.6753000",
-  "location_address": "...", "distance_km": "5.00",
-  "discount_amount": "0.00",
-  "service_price": "50.00", "sub_service_price": "0.00", "materials_price": "0.00",
-  "total_price": "50.00",
+  "scheduled_at": "...", "started_at": null, "completed_at": null,
+  "cancelled_at": null, "cancel_reason": null, "assigned_at": "...",
+  "location_lat": "24.71", "location_lng": "46.67", "location_address": "...", "distance_km": "5.00",
+  "discount_amount":"0.00", "service_price":"50.00", "sub_service_price":"0.00", "materials_price":"0.00",
+  "total_price":"50.00", "package_covered_amount":"0.00", "cash_due_amount":"50.00",
   "user_package_id": null, "user_package": null,
-  "package_covered_amount": "0.00", "cash_due_amount": "50.00",
-  "price_items": [ ... ], "sub_services": [ ... ], "materials": [ ... ],
-  "payments": [ { "id": 31, "method": "cash", "status": "pending", "amount": "50.00" } ],
-  "notes": "...",
-  "created_at": "...", "updated_at": "..."
+  "price_items":[...], "sub_services":[...], "materials":[...],
+  "payments":[ { "id":31, "method":"cash", "status":"pending", "amount":"50.00" } ],
+  "notes":"...", "created_at":"...", "updated_at":"..."
 }
 ```
 
-### ⭐ كيف نميّز نوع الخدمة (غسيل/صيانة/طريق/سحب)؟
+## 4.1 ⭐ كيف تميّز نوع الخدمة؟
+**لا يوجد حقل `service_kind`** — يُشتقّ من **`category.name`** (الإنجليزي ثابت عبر البيئات، لا تعتمد على `category_id`):
 
-**لا يوجد حقل `service_kind`.** يُشتقّ النوع من **`category`** (مُحمّلة تلقائياً). التصنيفات الثابتة الثلاثة:
-
-| `category.name` (إنجليزي ثابت) | `category.name_ar`  | النوع في تطبيقك            |
-| ------------------------------ | ------------------- | -------------------------- |
-| `Car Wash`                     | غسيل سيارات         | washing (غسّال)            |
-| `Maintenance`                  | صيانة ميكانيكية     | maintenance (ميكانيكي)     |
-| `Roadside Assistance`          | المساعدة على الطريق | road assistance (ميكانيكي) |
-
-- ميّز بـ **`category.name`** (الإنجليزي ثابت عبر البيئات؛ `category_id` قد يختلف حسب ترتيب البذر — لا تعتمد عليه).
-- **السحب (towing)** ليس تصنيفاً مستقلاً — هو حالة داخل "Roadside Assistance". تعرفه بوجود
-  `towing-detail` للطلب (عبر `GET /bookings/{id}/towing-detail`؛ يرجع null إن لا سحب).
-- ⚠️ علاقات التفاصيل (`roadAssistance`/`maintenanceDetail`/`towingDetail`) **ليست ضمن التحميل التلقائي** لـ `/bookings`
-  — القائمة لا تتضمّنها. اجلبها عند فتح التفاصيل عبر مساراتها المخصّصة (القسم 4.3/4.4).
-
-### طريقة/حالة الدفع
-
-ليست حقلاً مباشراً على الطلب، بل من مصفوفة **`payments`** (كل عنصر فيه `method` + `status` + `amount`).
-لإظهار زر "تأكيد النقد": ابحث في `payments` عن دفعة `method="cash"` و`status="pending"`.
-كما يوجد `cash_due_amount` (المبلغ النقدي المستحق) و`package_covered_amount` كحقلين مباشرين مساعدين.
-
-## 11.2 أفعال دورة الحياة (مؤكَّدة من الكود)
-
-| الفعل       | المسار                                    | body        | الشرط                                  | الرد                                |
-| ----------- | ----------------------------------------- | ----------- | -------------------------------------- | ----------------------------------- |
-| بدء         | `POST /bookings/{id}/start`               | **لا body** | الحالة `assigned`                      | OrderResource (بعد → `in_progress`) |
-| إنهاء       | `POST /bookings/{id}/complete`            | **لا body** | الحالة `in_progress`                   | OrderResource (بعد → `completed`)   |
-| تأكيد النقد | `POST /payments/{paymentId}/confirm-cash` | **لا body** | الدفعة `method=cash` و`status=pending` | PaymentResource (بعد → `paid`)      |
-
-⚠️ **تنبيهان مهمان لتأكيد النقد:**
-
-1. المعرّف في المسار هو **معرّف الدفعة (`payment.id`)** وليس معرّف الطلب — خذه من `order.payments[].id`.
-2. **لا يشترط أن يكون الطلب `completed`** — يكفي أن تكون الدفعة النقدية `pending`. (مستقلّ عن حالة الطلب.)
-
-تفاصيل الميكانيكي (`maintenance/road/towing-detail`): الحقول في القسم 4.4 **نهائية ومؤكَّدة**.
-
-## 11.3 ⭐ بيانات الـ Seed — **موجودة الآن** (مع ثغرات مذكورة)
-
-شغّل `php artisan migrate:fresh --seed`. المتوفّر (كل الحسابات كلمة مرورها `password123`):
-
-**حسابات جاهزة:**
-| الدور | الإيميل | الحالة |
+| `category.name` | النوع | يخصّ |
 |---|---|---|
-| غسّال | `washer@system.com` | نشط، فرع 1، `employee_washer` |
-| ميكانيكي | `mechanic@system.com` | نشط، فرع 1، `employee_mechanic` |
-| ورشة | `workshop@system.com` | يملك ورشة "التميز" (Riyadh) بحالة `active` |
+| `Car Wash` | غسيل | الغسّال |
+| `Maintenance` | صيانة | الميكانيكي/الورشة |
+| `Roadside Assistance` | مساعدة على الطريق | الميكانيكي |
 
-**بيانات مرتبطة:** 20 ورشة عبر مدن السعودية (بإحداثيات حقيقية — مثالية لاختبار `/workshops/nearby`)،
-عملاء + سيارات، و**40 طلباً** بحالات عشوائية (pending/assigned/in_progress/completed/cancelled)
-ومسندة لموظفي الفرع 1 (فيصيب بعضها الغسّال وبعضها الميكانيكي) — فيظهر الـ Scoping للموظفين فعلياً.
+- **السحب (towing)** ليس تصنيفاً مستقلاً — حالة داخل Roadside، تعرفها بوجود `towing-detail` (يرجع null إن لا سحب).
+- ⚠️ تفاصيل صيانة/طريق/سحب **ليست ضمن التحميل التلقائي** — اجلبها بمساراتها (القسم 6).
 
-**⚠️ ثغرات في البذر الحالي (يجب معالجتها لاختبار كامل):**
-
-1. **الورشة سترى 0 طلبات:** `OrderFactory` لا يضبط `workshop_id`، والورشة تُصفّى بـ `workshop_id`.
-   → مطلوب بذر طلبات بـ `workshop_id = ورشة التميز` لاختبار تطبيق الورشة.
-2. **لا مدفوعات مبذورة:** لا يوجد PaymentSeeder → `payments` فارغة في كل الطلبات
-   → **زر تأكيد النقد غير قابل للاختبار** حتى تُبذر دفعات نقدية `pending`.
-3. **لا تفاصيل ميدانية مبذورة:** لا بذر لـ road/maintenance/towing → مساراتها ترجع `null`
-   → املأها يدوياً عبر POST لاختبار شاشات الميكانيكي، أو اطلب بذرها.
-
-## 11.4 إجابات الأسئلة المفتوحة (9.4)
-
-| السؤال                            | الإجابة                                                                                                        |
-| --------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| تمييز نوع الخدمة؟                 | عبر **`category.name`** (Car Wash/Maintenance/Roadside Assistance)؛ السحب بوجود `towing-detail`. لا حقل مباشر. |
-| هل تُسند الورشة الطلبات لموظفيها؟ | **لا حالياً** — `assign` صلاحيته للأدمن/السوبر أدمن فقط، ولا مسار للورشة. ميزة مستقبلية محتملة.                |
-| زر تأكيد النقد: متى؟              | متى كانت **دفعة نقدية `pending`** (مستقلّ عن حالة الطلب، لا يشترط `completed`).                                |
-| العملة؟                           | غير موجودة في `OrderResource` (الأسعار أرقام decimal كنصوص بلا عملة). **قرار منتج** — افترض ر.س حتى يؤكَّد.    |
-| موعد الميزات بلا API (القسم 6)؟   | ما زالت بلا مسارات في هذا التحديث — لا تعتمد عليها بعد.                                                        |
-| إشعارات push عند الإسناد؟         | **غير مؤكّد من كود المسارات** — يحتاج مراجعة فريق الباك/الموبايل.                                              |
-
-## 11.5 خلاصة للفرونت
-
-- استبدل الـ mock بـ **OrderResource** أعلاه (11.1). ميّز النوع بـ `category.name`، والدفع من `payments[]`.
-- الأفعال بلا body (11.2)، وانتبه أن تأكيد النقد يأخذ **معرّف الدفعة** لا الطلب.
-- الحسابات والطلبات جاهزة للاختبار — والثغرات الثلاث في 11.3 **عولجت بالكامل**، انظر القسم 12.
+## 4.2 الدفع داخل الطلب
+طريقة/حالة الدفع من مصفوفة **`payments[]`** (لكل عنصر `method` + `status` + `amount` + `id`)، وليست حقلاً مباشراً.
+- **`method`:** cash · card · wallet · point · package
+- **`status`:** pending · paid · failed · refunded
+- زر "تأكيد النقد" يظهر عند وجود دفعة `method=cash`,`status=pending`. الحقلان `cash_due_amount`/`package_covered_amount` مساعدان.
 
 ---
 
-# 12) ✅ البذور جاهزة — بيانات تجريبية موجّهة للورشة/الموظف (تمّت)
+# 5) الدفع النقدي — `confirm-cash`
 
-> عولجت ثغرات القسم 11.3 عبر بذرة مخصّصة `WorkshopEmployeeDemoSeeder` (تعمل ضمن `migrate:fresh --seed`).
-> شغّل: `php artisan migrate:fresh --seed` ثم سجّل الدخول بالحسابات أدناه (كلمة المرور `password123`).
+| المسار | body | مَن + الشرط |
+|---|---|---|
+| `POST /api/payments/{paymentId}/confirm-cash` | لا | غسّال/ميكانيكي. الدفعة `method=cash` و`status=pending` |
+| `GET /api/payments/{id}` | — | غسّال/ميكانيكي (عرض دفعة) |
 
-## 12.1 ما أصبح متوفّراً (مؤكَّد بعد التشغيل الفعلي)
+- ⚠️ المعرّف = **`payment.id`** (من `order.payments[].id`)، وليس معرّف الطلب.
+- يرجع `PaymentResource`: `id, payment_number, type, method, status, amount, points_used`. بعد النجاح → `status=paid`.
+- ⛔ الورشة لا تملك تأكيد النقد.
 
-| البند                                                  | قبل    | الآن                                          |
-| ------------------------------------------------------ | ------ | --------------------------------------------- |
-| طلبات ترى بها **الورشة** (`workshop_id` = ورشة التميز) | 0 ❌   | **3** ✅ (assigned / in_progress / completed) |
-| **دفعات نقدية `pending`** (لاختبار تأكيد النقد)        | 0 ❌   | **6** ✅                                      |
-| تفاصيل **صيانة / طريق / سحب**                          | 0 ❌   | **2 / 2 / 1** ✅                              |
-| طلبات مسندة للغسّال (`washer@`)                        | عشوائي | **7** (منها 3 مضمونة من البذرة)               |
-| طلبات مسندة للميكانيكي (`mechanic@`)                   | عشوائي | **9** (منها 3 مضمونة: صيانة + طريق + سحب)     |
+---
 
-## 12.2 الحسابات وما يراه كل منها
+# 6) التفاصيل الميدانية (ميكانيكي/ورشة)
 
-| الدور    | الإيميل               | ماذا يظهر عند `GET /bookings` (Scoping تلقائي)                                                                               |
-| -------- | --------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| غسّال    | `washer@system.com`   | طلبات غسيل مسندة له (assigned/in_progress/completed) — بعضها بدفعة نقدية `pending` لاختبار **تأكيد النقد**                   |
-| ميكانيكي | `mechanic@system.com` | طلبات صيانة + مساعدة على الطريق + **سحب** — لكلٍّ تفاصيله عبر `maintenance/road/towing-detail`، وبعضها بدفعة نقدية `pending` |
-| ورشة     | `workshop@system.com` | **3 طلبات** لورشته (assigned/in_progress/completed) — أحدها فيه `maintenance-detail`                                         |
+سلوك مشترك: **`GET`** يرجع التفصيل أو `null` (إن لم يُنشأ) بـ 200. **`POST`** = upsert (إنشاء أو تعديل، حقول جزئية).
 
-## 12.3 سيناريوهات جاهزة للتجربة
+## 6.1 صيانة — `maintenance-detail` (ميكانيكي + ورشة)
+- الرد: `{ id, order_id, workshop_id, workshop?, notes, created_at }`.
+- حقول POST: `workshop_id?`، `notes?` (≤5000).
 
-1. **دورة حياة الطلب:** ادخل كـ `washer@` → افتح طلباً `assigned` → `start` → يصبح `in_progress` → `complete` → `completed`.
-2. **تأكيد النقد:** في طلب فيه `payments[]` بعنصر `method="cash"`,`status="pending"` → خذ `payment.id` →
-   `POST /payments/{paymentId}/confirm-cash` → يصبح `paid`.
-3. **شاشات الميكانيكي:** ادخل كـ `mechanic@` → طلب الصيانة/الطريق/السحب → افتح `GET /bookings/{id}/road-detail`
-   أو `/towing-detail` → ستجد بيانات فعلية (لا null) → عدّلها بـ POST (upsert).
-4. **تطبيق الورشة:** ادخل كـ `workshop@` → `GET /workshops/my` (ورشة التميز، Riyadh) + `GET /bookings` (3 طلبات).
+## 6.2 مساعدة على الطريق — `road-detail` (ميكانيكي + ورشة)
+- الرد: `{ id, order_id, problem_type_id, problem_type?, car_type_size, problem_description, problem_image_url, ai_diagnosis, ai_chat_log, created_at }`.
+- حقول POST: `problem_type_id?`، `car_type_size?` (sedan/suv/hatchback/pickup)، `problem_description?`، `problem_image_url?` (URL)، `ai_diagnosis?`.
+- ⚠️ `ai_chat_log` عرض فقط. أنواع المشاكل للميكانيكي من `/suggested-problems`.
 
-## 12.4 ملاحظات
+## 6.3 سحب — `towing-detail` (ميكانيكي فقط)
+- الرد: `{ id, order_id, car_type_size, destination_lat, destination_lng, destination_address, notes, created_at }`.
+- `POST /bookings/{id}/towing-detail` — حقول: `car_type_size?`, `destination_lat?`, `destination_lng?`, `destination_address?`, `notes?`.
+- 🆕 `POST /bookings/{id}/towing-detail/destination` — تحديث الوجهة فقط: `destination_lat` + `destination_lng` (كلاهما مطلوب).
 
-- البذرة **مخصّصة وحتمية** (deterministic) — الطلبات تحمل ملاحظة "طلب تجريبي لتطبيق الورشة/الموظف"،
-  والدفعات أرقامها `PAY-DEMO-0001..` لتمييزها.
-- تعمل بأمان مع بقية البذور (لا تتعارض مع الـ 40 طلباً العشوائية من `OrderFactory`).
-- إن أردت إعادة الضبط في أي وقت: `php artisan migrate:fresh --seed`.
-- ما زالت الميزات بلا مسارات (القسم 6) خارج التغطية — لم تُبذر لأنها بلا API أصلاً.
+---
 
-# 13) ✅ ردّ الفرونت: نعم، ابذر الثغرات (مواصفات دقيقة)
+# 7) قطع الغيار — `spare-part-requests` (ميكانيكي فقط)
 
-> كتبه فريق الفرونت (Claude). القرار: **ننتظر بذر الباك قبل ربط الـ API الفعلي** — الشكل صار واضحاً
-> (شكراً على القسم 11)، لكن لن نستبدل الـ mock حتى تصير البيئة قابلة للاختبار الكامل.
-> **نعم، من فضلك ابذر الثلاثة التالية** (بالتفصيل حتى نختبر كل شاشة ودور):
+**الفلو:** الميكانيكي يطلب قطعة على طلب مفتوح → **العميل يعتمد/يرفض** (لوحة العميل، خارج تطبيقك).
 
-## 13.1 ⭐ طلبات الورشة (`workshop_id`) — لاختبار تطبيق الورشة
+| العملية | المسار | مَن |
+|---|---|---|
+| إنشاء | `POST /api/spare-part-requests` | ميكانيكي (`create.spare_part_request`) |
+| قائمة | `GET /api/spare-part-requests` | ميكانيكي (`show.spare_part_requests`) |
+| تفاصيل | `GET /api/spare-part-requests/{id}` | ميكانيكي |
+| اعتماد/رفض | `POST .../{id}/approve` \| `/reject` | ⛔ العميل فقط |
 
-- اضبط `workshop_id = ورشة "التميز"` (التي يملكها `workshop@system.com`) على **عدّة طلبات** (٦–٨).
-- غطِّ الحالات: `assigned`, `in_progress`, `completed` (وواحد `cancelled`).
-- غطِّ الأنواع الثلاثة: `Car Wash` + `Maintenance` + `Roadside Assistance`.
+- حقول الإنشاء: `order_id`, `material_id` (من `/materials`), `quantity` (≥1), `specifications?`, `notes?`.
+- قواعد: الطلب يجب أن يكون **مفتوحاً** (ليس completed/cancelled)؛ لا يُعاد البتّ في المبتوت.
+- الرد: `{ id, order_id, order?, employee_id, employee?, material_id, material?, quantity, specifications, status, notes, decided_at, created_at, updated_at }` — الحالة: `pending|approved|rejected|ordered|received`.
+- ⛔ الغسّال والورشة: لا صلاحية قطع غيار إطلاقاً.
 
-## 13.2 ⭐ دفعات نقدية `pending` — لاختبار زر تأكيد النقد
+---
 
-- لبعض الطلبات (من نصيب الغسّال والميكانيكي **و** الورشة) أنشئ سجلّ `payments` بـ
-  `method="cash"` و`status="pending"` و`amount = cash_due_amount` (أو `total_price`).
-- اترك بعض الطلبات بدفع `card`/`paid` لنتأكد أن الزر **لا** يظهر لها (اختبار منطق الإظهار).
+# 8) تقارير الموظف — `employee-reports`
 
-## 13.3 تفاصيل ميدانية مبذورة — لاختبار شاشات الميكانيكي
+| العملية | المسار | مَن |
+|---|---|---|
+| إنشاء | `POST /api/employee-reports` | غسّال + ميكانيكي (`create.employee_report`) |
+| قائمة (فلاتر `?order_id=&employee_id=&status=&per_page=`) | `GET /api/employee-reports` | غسّال + ميكانيكي + **ورشة** |
+| تفاصيل | `GET /api/employee-reports/{id}` | نفس أعلاه |
 
-- `maintenance-detail` لبعض طلبات `Maintenance`.
-- `road-detail` لبعض طلبات `Roadside Assistance` (مع `problem_description`/`ai_diagnosis`).
-- `towing-detail` لطلب `Roadside Assistance` واحد على الأقل — لنختبر أيضاً **اشتقاق "سحب" = وجود towing-detail**.
+- حقول الإنشاء: `order_id`, `problem_description`, `affected_parts[]?`, `images[]?` (روابط), `recommendation?`.
+- الرد: `{ id, order_id, order?, employee_id, employee?, problem_description, affected_parts, images, recommendation, status, reviewed_at, created_at }`.
+- الورشة **عرض فقط** (لا تنشئ).
 
-## 13.4 إسناد يغطّي الأدوار (تأكيد)
+---
 
-- `washer@system.com` ← طلبات **Car Wash** (بعضها `assigned` وبعضها `in_progress`).
-- `mechanic@system.com` ← طلبات **Maintenance + Roadside** (وأحدها فيه towing).
-- `workshop@system.com` ← الطلبات ذات `workshop_id` (بند 13.1).
+# 9) سجلّات GPS — `gps-logs` (إرسال فقط)
 
-## 13.5 تأكيدات صغيرة نحتاجها قبل الربط
+| العملية | المسار | مَن |
+|---|---|---|
+| إرسال نقطة | `POST /api/gps-logs` | غسّال + ميكانيكي (`manage.gps_logs`) |
+| قراءة | `GET /api/gps-logs`, `/{id}` | ⛔ لا أحد منهم (يحتاج `show.gps_logs`) |
 
-1. مسار الترقيم في القائمة: هل هو `data.data` (المصفوفة) + `data.meta`؟ نعتمد عليه للـ pagination.
-2. هل `payments[]` مُضمَّنة في **القائمة `/bookings`** أم فقط في التفاصيل `/bookings/{id}`؟
-   (يحدّد هل نُظهر زر النقد من القائمة أم بعد فتح التفاصيل).
-3. قيم `category.name` في البذر هي حرفياً `Car Wash` / `Maintenance` / `Roadside Assistance`؟
-4. `confirm-cash` يعلّم **تلك الدفعة تحديداً** `paid` ويقلّل `cash_due_amount`؟
+- حقول: `latitude` (مطلوب), `longitude` (مطلوب), `order_id?`, `recorded_at?`.
+- ⚠️ إرسال فقط — لا شاشة عرض. استعمله للبثّ أثناء تنفيذ الطلب.
 
-> بمجرّد أن تؤكّد بذر 13.1–13.3، نستبدل الـ mock بالربط الفعلي فوراً (الهيكل والتنقّل جاهزان من طرفنا).
+---
+
+# 10) الورشة — المسارات الخاصة
+
+| العملية | المسار | ملاحظات |
+|---|---|---|
+| ملف ورشتي | `GET /api/workshops/my` | ⭐ |
+| عرض ورشة | `GET /api/workshops/{id}` | ورشته فقط (وإلا 403) |
+| تعديل ورشتي | `POST /api/workshops/{id}` | حقوله: `name, name_ar, address, city, latitude, longitude` (بلا بادئة `workshop_`، وبلا `status/rating_avg`) |
+| 🆕 سِجِل صيانة سيارة | `GET /api/workshops/cars/{car}/history` | تاريخ صيانة/مساعدة سيارة زارت ورشته (`OrderResource[]`) |
+| ورش قريبة | `GET /api/workshops/nearby` | `?latitude=&longitude=&radius_km=` (متاح للثلاثة) |
+
+- كيان الورشة: `{ id, name, name_ar, address, city, latitude, longitude, status, rating_avg, distance_km?, owner?, created_at }`.
+- الحالات: `pending|approved|rejected|active|inactive|suspended`.
+
+---
+
+# 11) قوائم مساعدة (قراءة، للثلاثة إلا المذكور)
+
+- 🆕 **`GET /api/enums`** — كل الـ enums بقيمها ومسمّياتها المترجمة (بلا صلاحية، لأي مستخدم مسجّل).
+  استعمله كمصدر واحد لقيم الحالات/الأنواع بدل كتابتها يدوياً.
+- **الكتالوج:** `/categories` (+`/{id}/services`), `/services` (+`/{id}/sub-services`), `/sub-services`, `/car-types`, `/car-brands`.
+- **المواد:** `/materials`, `/materials/{id}` (لاختيار `material_id` في قطع الغيار). `/material-units` (غسّال/ميكانيكي).
+- **المشاكل المقترحة:** `/suggested-problems` (ميكانيكي فقط).
+- **سيارات العميل:** `/indexClient` (غسّال/ميكانيكي) · `/show/{id}` (الثلاثة).
+- **التقييمات:** `GET /ratings`, `/ratings/{id}` (عرض فقط للثلاثة).
+- **البروفايل:** `GET /profile/showProfile` · `POST /profile/updateProfile`.
+
+---
+
+# 12) الإشعارات (Firebase / In-App) — الوضع الحالي بدقّة
+
+النظام صار يُطلق إشعارات عبر أحداث/مستمعات:
+- **عند الإسناد (`assigned`):** يُشعَر **الموظف المُسنَد** + العميل. ✅ (أي: نعم، يوجد إشعار إسناد للموظف الآن)
+- عند `in_progress`/`completed`: العميل فقط. عند `cancelled`: العميل + الموظف.
+- إشعارات أخرى: تأكيد الدفع النقدي، بتّ قطع الغيار (للميكانيكي)، تقييم جديد (للموظف والورشة).
+
+⚠️ **لكن عملياً للفرونت — غير مكتمل بعد:**
+1. **دفع FCM حالياً no-op:** قناة `FcmChannel` كتلة فارغة (TODO) — لا يُرسَل push فعلي حتى تُضبط بيانات Firebase في الباك.
+2. **لا مسار لتسجيل توكن الجهاز** (device token) — التوكنات تُقرأ من جدول `device_tokens` لكن **لا endpoint** لإضافتها.
+3. **لا مسار لجلب الإشعارات داخل التطبيق** (in-app) — لا يوجد `GET /notifications`.
+
+👈 **الخلاصة:** اعتمد الآن على **polling** (`GET /bookings` دورياً/عند السحب للتحديث) لاكتشاف الطلبات الجديدة.
+الـ push الفوري ينتظر من الباك: (أ) تفعيل FCM، (ب) endpoint لتسجيل device token، (ج) endpoint لقائمة الإشعارات.
+
+---
+
+# 13) البيانات التجريبية (Seed) — جاهزة
+
+`php artisan migrate:fresh --seed` يوفّر (كلمة المرور `password123`):
+- `washer@` : طلبات غسيل مسندة له (assigned/in_progress/completed) بعضها بدفعة نقدية `pending`.
+- `mechanic@` : طلبات صيانة + طريق + **سحب**، لكلٍّ تفاصيله، وبعضها بدفعة نقدية `pending`.
+- `workshop@` : ورشة "التميز" (Riyadh) + **3 طلبات** بـ `workshop_id` (assigned/in_progress/completed).
+
+سيناريوهات: دورة الحياة (start→complete) · تأكيد النقد (خذ `payment.id` من `payments[]`) · شاشات الميكانيكي (road/towing-detail فيها بيانات) · تطبيق الورشة (`/workshops/my` + `/bookings`).
+
+---
+
+# 14) ملاحظات ثابتة + ما يحتاجه الفرونت
+
+**قواعد ثابتة:**
+1. لا ترسل `customer_id`/فلاتر هوية — الـ Scoping تلقائي.
+2. القيم decimal (الأسعار/الإحداثيات/التقييم) ترجع **كنصوص** — حوّلها لأرقام.
+3. العلاقات `whenLoaded` قد تكون null — عاملها كذلك.
+4. الأخطاء موحّدة: 401 (توكن) · 403 (صلاحية/ملكية/حساب غير نشط) · 404 · 422 (`data` = خريطة حقول).
+5. `confirm-cash` بمعرّف **الدفعة**، والتفاصيل الميدانية upsert بـ POST واحد.
+
+**ما ينتظره الفرونت من الباك (غير جاهز بعد):**
+- تفعيل **push (FCM)** + endpoint **تسجيل device token** + endpoint **قائمة الإشعارات**.
+- (عند الحاجة) endpoints **إدارة موظفي الورشة** — الصلاحيات موجودة للورشة (`add/edit/show.employee`) لكن **لا مسارات**.
+- كتابة **مواد الطلب** (`manage.order_materials`) — لا مسار (العرض فقط عبر `bookings/{id}/materials`).
+
+**تنبيهات إزالة:** كيان **العقود (Contracts) حُذف** من الباك — أزِل أي أثر له.

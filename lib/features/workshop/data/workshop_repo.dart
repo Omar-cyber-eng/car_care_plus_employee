@@ -1,5 +1,6 @@
 import 'package:car_care_plus/core/networking/api_constants.dart';
 import 'package:car_care_plus/core/networking/api_service.dart';
+import 'package:car_care_plus/features/orders/data/order_model.dart';
 import 'package:car_care_plus/features/workshop/data/workshop_model.dart';
 
 // ملف الورشة — GET ورشتي + تعديلها (المالك فقط).
@@ -38,5 +39,19 @@ class WorkshopRepo {
       },
     );
     return WorkshopModel.fromJson(response.data['data'] as Map<String, dynamic>);
+  }
+
+  /// سجل صيانة/مساعدة سيارة زارت ورشتي — يرجع قائمة OrderResource.
+  Future<List<OrderModel>> getCarHistory(int carId) async {
+    final response = await _apiService.get(
+      endpoint: ApiConstants.workshopCarHistory(carId),
+    );
+    final data = response.data['data'];
+    final List list = data is List
+        ? data
+        : (data is Map ? (data['data'] as List? ?? const []) : const []);
+    return list
+        .map((e) => OrderModel.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 }

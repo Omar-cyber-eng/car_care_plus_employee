@@ -12,11 +12,24 @@ import 'package:car_care_plus/features/orders/presentation/employee_report_page.
 import 'package:car_care_plus/features/orders/presentation/order_service_detail_page.dart';
 import 'package:car_care_plus/features/orders/presentation/spare_parts_page.dart';
 import 'package:car_care_plus/features/orders/presentation/widgets/gps_tracker.dart';
+import 'package:car_care_plus/features/workshop/presentation/workshop_car_history_page.dart';
 
-class OrderDetailsPage extends StatelessWidget {
+class OrderDetailsPage extends StatefulWidget {
   final int orderId;
 
   const OrderDetailsPage({super.key, required this.orderId});
+
+  @override
+  State<OrderDetailsPage> createState() => _OrderDetailsPageState();
+}
+
+class _OrderDetailsPageState extends State<OrderDetailsPage> {
+  @override
+  void initState() {
+    super.initState();
+    // نجلب التفاصيل الكاملة (payments والعلاقات) لأن القائمة قد تكون مختصرة.
+    context.read<OrdersCubit>().loadOrderDetails(widget.orderId);
+  }
 
   void _snack(BuildContext context, String message) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -37,7 +50,7 @@ class OrderDetailsPage extends StatelessWidget {
         foregroundColor: AppColors.surfaceWhite,
         elevation: 0,
         title: Text(
-          'تفاصيل الطلب #$orderId',
+          'تفاصيل الطلب #${widget.orderId}',
           style: TextStyles.Size18
               .withColor(AppColors.surfaceWhite)
               .withWeight(FontWeight.bold),
@@ -46,7 +59,7 @@ class OrderDetailsPage extends StatelessWidget {
       ),
       body: BlocBuilder<OrdersCubit, OrdersState>(
         builder: (context, _) {
-          final order = context.read<OrdersCubit>().orderById(orderId);
+          final order = context.read<OrdersCubit>().orderById(widget.orderId);
           if (order == null) {
             return Center(
               child: Text(
@@ -195,8 +208,16 @@ class _Actions extends StatelessWidget {
       ),
     ));
 
-    // تفاصيل ميدانية للميكانيكي — الصيانة لها تفصيلها، والمساعدة على الطريق
-    // لها تفصيلان: مساعدة على الطريق + سحب (السحب حالة داخل Roadside).
+    // الدور يحكم الأزرار (مصفوفة صلاحيات الدليل §2).
+    final authState = context.read<AuthCubit>().state;
+    final role = authState is AuthSuccess ? authState.user.role : null;
+    final isMechanic = role == 'employee_mechanic';
+    final isEmployee = isMechanic || role == 'employee_washer';
+    final isWorkshop = role == 'workshop';
+    final orderIsOpen = order.status != OrderStatus.completed &&
+        order.status != OrderStatus.cancelled;
+
+    // تفاصيل ميدانية: صيانة/طريق (ميكانيكي+ورشة)، سحب (ميكانيكي فقط).
     if (order.status != OrderStatus.pending &&
         order.status != OrderStatus.cancelled) {
       void openDetail(OrderServiceKind kind, String label) {
@@ -215,22 +236,18 @@ class _Actions extends StatelessWidget {
         ));
       }
 
-      if (order.kind == OrderServiceKind.maintenance) {
+      final canFieldDetails = isMechanic || isWorkshop;
+      if (order.kind == OrderServiceKind.maintenance && canFieldDetails) {
         openDetail(OrderServiceKind.maintenance, 'تفاصيل الصيانة');
       } else if (order.kind == OrderServiceKind.road) {
-        openDetail(OrderServiceKind.road, 'تفاصيل المساعدة على الطريق');
-        openDetail(OrderServiceKind.towing, 'تفاصيل السحب');
+        if (canFieldDetails) {
+          openDetail(OrderServiceKind.road, 'تفاصيل المساعدة على الطريق');
+        }
+        if (isMechanic) {
+          openDetail(OrderServiceKind.towing, 'تفاصيل السحب');
+        }
       }
     }
-
-    // ميزات حسب الدور (قطع الغيار للميكانيكي، التقارير للموظفين+الورشة).
-    final authState = context.read<AuthCubit>().state;
-    final role = authState is AuthSuccess ? authState.user.role : null;
-    final isMechanic = role == 'employee_mechanic';
-    final isEmployee = isMechanic || role == 'employee_washer';
-    final isWorkshop = role == 'workshop';
-    final orderIsOpen = order.status != OrderStatus.completed &&
-        order.status != OrderStatus.cancelled;
 
     if (isMechanic) {
       children.add(_OutlinedButton(
@@ -264,8 +281,23 @@ class _Actions extends StatelessWidget {
       ));
     }
 
+    // سجل صيانة السيارة — للورشة فقط.
+    if (isWorkshop) {
+      children.add(_OutlinedButton(
+        label: 'سجل صيانة السيارة',
+        icon: Icons.history_rounded,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WorkshopCarHistoryPage(carId: order.carId),
+          ),
+        ),
+      ));
+    }
+
+    // تأكيد النقد — للموظفين فقط (الغسّال/الميكانيكي)، لا الورشة.
     final cashPayment = order.cashPendingPayment;
-    if (order.needsCashConfirmation && cashPayment != null) {
+    if (isEmployee && order.needsCashConfirmation && cashPayment != null) {
       children.add(_FilledButton(
         label: 'تأكيد استلام النقد',
         icon: Icons.attach_money_rounded,
