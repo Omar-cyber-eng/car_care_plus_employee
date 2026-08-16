@@ -148,6 +148,60 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 16),
+                _SectionCard(
+                  title: 'تفصيل السعر',
+                  rows: [
+                    _DetailRow(
+                      icon: Icons.cleaning_services_outlined,
+                      label: 'الخدمة',
+                      value: '${order.servicePrice.toStringAsFixed(0)} ل.س',
+                    ),
+                    if (order.subServicePrice > 0)
+                      _DetailRow(
+                        icon: Icons.add_circle_outline,
+                        label: 'خدمات فرعية',
+                        value:
+                            '${order.subServicePrice.toStringAsFixed(0)} ل.س',
+                      ),
+                    if (order.materialsPrice > 0)
+                      _DetailRow(
+                        icon: Icons.inventory_2_outlined,
+                        label: 'المواد',
+                        value: '${order.materialsPrice.toStringAsFixed(0)} ل.س',
+                      ),
+                    _DetailRow(
+                      icon: Icons.receipt_long_outlined,
+                      label: 'الإجمالي',
+                      value: '${order.price.toStringAsFixed(0)} ل.س',
+                    ),
+                    if (order.cashDueAmount > 0)
+                      _DetailRow(
+                        icon: Icons.attach_money_rounded,
+                        label: 'المستحق نقداً',
+                        value: '${order.cashDueAmount.toStringAsFixed(0)} ل.س',
+                      ),
+                  ],
+                ),
+                if (order.subServiceNames.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    title: 'الخدمات الفرعية',
+                    rows: [
+                      for (final s in order.subServiceNames) _BulletRow(text: s),
+                    ],
+                  ),
+                ],
+                if (order.materials.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  _SectionCard(
+                    title: 'المواد',
+                    rows: [
+                      for (final m in order.materials)
+                        _BulletRow(text: '${m.name} × ${m.quantity}'),
+                    ],
+                  ),
+                ],
                 const SizedBox(height: 24),
                 _Actions(order: order, snack: _snack),
               ],
@@ -563,6 +617,31 @@ class _DetailRow extends StatelessWidget {
                     .withWeight(FontWeight.w600),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _BulletRow extends StatelessWidget {
+  final String text;
+  const _BulletRow({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: const Icon(Icons.circle, size: 6, color: AppColors.primaryBlue),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyles.Size15.withColor(AppColors.darkBlueBlack),
           ),
         ),
       ],

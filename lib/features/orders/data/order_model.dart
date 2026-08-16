@@ -94,6 +94,25 @@ class PaymentModel {
       );
 }
 
+// مادة مستخدمة في الطلب (من مصفوفة materials[]).
+class OrderMaterial {
+  final String name;
+  final int quantity;
+
+  const OrderMaterial({required this.name, required this.quantity});
+
+  factory OrderMaterial.fromJson(Map<String, dynamic> json) {
+    final material = json['material'] as Map<String, dynamic>?;
+    final name = material == null
+        ? 'مادة'
+        : (material['name_ar'] ?? material['name'] ?? 'مادة').toString();
+    final qty = json['quantity'] is int
+        ? json['quantity'] as int
+        : int.tryParse(json['quantity']?.toString() ?? '') ?? 0;
+    return OrderMaterial(name: name, quantity: qty);
+  }
+}
+
 // موديل الطلب = OrderResource (القسم 11.1 من دليل الورشة/الموظف).
 class OrderModel {
   final int id;
@@ -108,6 +127,11 @@ class OrderModel {
   final String scheduledAt;
   final double price;
   final double cashDueAmount;
+  final double servicePrice;
+  final double subServicePrice;
+  final double materialsPrice;
+  final List<String> subServiceNames;
+  final List<OrderMaterial> materials;
   final List<PaymentModel> payments;
   final OrderStatus status;
 
@@ -124,6 +148,11 @@ class OrderModel {
     required this.scheduledAt,
     required this.price,
     required this.cashDueAmount,
+    required this.servicePrice,
+    required this.subServicePrice,
+    required this.materialsPrice,
+    required this.subServiceNames,
+    required this.materials,
     required this.payments,
     required this.status,
   });
@@ -152,6 +181,17 @@ class OrderModel {
       scheduledAt: _formatDate(json['scheduled_at']?.toString()),
       price: _toDouble(json['total_price']),
       cashDueAmount: _toDouble(json['cash_due_amount']),
+      servicePrice: _toDouble(json['service_price']),
+      subServicePrice: _toDouble(json['sub_service_price']),
+      materialsPrice: _toDouble(json['materials_price']),
+      subServiceNames: ((json['sub_services'] as List?) ?? const [])
+          .map((e) {
+        final ss = (e as Map)['sub_service'] as Map<String, dynamic>?;
+        return (ss?['name_ar'] ?? ss?['name'] ?? 'خدمة فرعية').toString();
+      }).toList(),
+      materials: ((json['materials'] as List?) ?? const [])
+          .map((e) => OrderMaterial.fromJson(e as Map<String, dynamic>))
+          .toList(),
       payments: paymentsJson
           .map((e) => PaymentModel.fromJson(e as Map<String, dynamic>))
           .toList(),
