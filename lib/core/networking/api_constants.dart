@@ -57,6 +57,12 @@ class ApiConstants {
 
   // سجلّات GPS (الموظف: إرسال فقط أثناء التنفيذ — GET يرجع 403 فلا نقرأها)
   static const String gpsLogs = 'gps-logs';
+
+  // المشاكل المقترحة (ميكانيكي) — لقائمة problem_type_id في road-detail
+  static const String suggestedProblems = 'suggested-problems';
+
+  // سجل حالة الطلب (غسّال/ميكانيكي، لا الورشة)
+  static String statusHistory(int orderId) => 'bookings/$orderId/status-history';
   // Cars Endpoints
 static const String userCars = 'cars/indexClient'; // جلب سيارات المستخدم
 static const String createCar = 'cars';             // إنشاء/إضافة سيارة جديدة (POST)

@@ -1,6 +1,7 @@
 import 'package:car_care_plus/core/networking/api_constants.dart';
 import 'package:car_care_plus/core/networking/api_service.dart';
 import 'package:car_care_plus/features/orders/data/customer_car_model.dart';
+import 'package:car_care_plus/features/orders/data/order_extras_model.dart';
 import 'package:car_care_plus/features/orders/data/order_model.dart';
 
 // طبقة بيانات الطلبات — تضرب /bookings (Scoping تلقائي من الباك حسب الدور).
@@ -68,6 +69,32 @@ class OrdersRepo {
       endpoint: _detailEndpoint(orderId, kind),
       data: fields,
     );
+  }
+
+  /// المشاكل المقترحة (ميكانيكي) — لقائمة problem_type_id في road-detail.
+  Future<List<SuggestedProblem>> getSuggestedProblems() async {
+    final response =
+        await _apiService.get(endpoint: ApiConstants.suggestedProblems);
+    final data = response.data['data'];
+    final List list = data is List
+        ? data
+        : (data is Map ? (data['data'] as List? ?? const []) : const []);
+    return list
+        .map((e) => SuggestedProblem.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// سجل حالة الطلب (غسّال/ميكانيكي) — قائمة الانتقالات.
+  Future<List<StatusHistoryEntry>> getStatusHistory(int orderId) async {
+    final response =
+        await _apiService.get(endpoint: ApiConstants.statusHistory(orderId));
+    final data = response.data['data'];
+    final List list = data is List
+        ? data
+        : (data is Map ? (data['data'] as List? ?? const []) : const []);
+    return list
+        .map((e) => StatusHistoryEntry.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   /// تفاصيل سيارة العميل (قراءة فقط) — GET /cars/show/{id} (متاح لكل الأدوار).

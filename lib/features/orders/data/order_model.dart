@@ -195,7 +195,7 @@ class OrderModel {
       payments: paymentsJson
           .map((e) => PaymentModel.fromJson(e as Map<String, dynamic>))
           .toList(),
-      status: _statusFromString(json['status']?.toString()),
+      status: orderStatusFromString(json['status']?.toString()),
     );
   }
 
@@ -247,7 +247,7 @@ OrderServiceKind _kindFromCategory(String? name) {
   }
 }
 
-OrderStatus _statusFromString(String? s) {
+OrderStatus orderStatusFromString(String? s) {
   switch (s) {
     case 'assigned':
       return OrderStatus.assigned;

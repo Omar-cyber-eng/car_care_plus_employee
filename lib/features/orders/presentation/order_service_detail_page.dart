@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:car_care_plus/core/networking/api_service.dart';
 import 'package:car_care_plus/core/resources/app_color.dart';
 import 'package:car_care_plus/core/resources/text_style.dart';
+import 'package:car_care_plus/features/orders/data/order_extras_model.dart';
 import 'package:car_care_plus/features/orders/data/order_model.dart';
 import 'package:car_care_plus/features/orders/data/orders_repo.dart';
 
@@ -33,6 +34,10 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
   static const _carSizes = ['sedan', 'suv', 'hatchback', 'pickup'];
   String? _carSize;
 
+  // أنواع المشاكل (للطريق) من /suggested-problems.
+  List<SuggestedProblem> _problems = [];
+  int? _problemTypeId;
+
   bool _loading = true; // جلب التفصيل الحالي
   bool _saving = false;
 
@@ -57,9 +62,14 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
       if (data != null) _prefill(data);
     } catch (_) {
       // نعرض نموذجاً فارغاً (قد يكون بلا تفاصيل بعد، أو تعذّر الجلب).
-    } finally {
-      if (mounted) setState(() => _loading = false);
     }
+    // أنواع المشاكل للطريق (أفضل جهد — لا تُعطّل النموذج).
+    if (widget.kind == OrderServiceKind.road) {
+      try {
+        _problems = await _repo.getSuggestedProblems();
+      } catch (_) {}
+    }
+    if (mounted) setState(() => _loading = false);
   }
 
   void _prefill(Map<String, dynamic> d) {
@@ -73,6 +83,9 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
       case OrderServiceKind.road:
         _problemController.text = (d['problem_description'] ?? '').toString();
         _diagnosisController.text = (d['ai_diagnosis'] ?? '').toString();
+        _problemTypeId = d['problem_type_id'] is int
+            ? d['problem_type_id'] as int
+            : null;
         break;
       case OrderServiceKind.towing:
         _destinationController.text =
@@ -96,6 +109,7 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
         if (t(_problemController).isNotEmpty) {
           f['problem_description'] = t(_problemController);
         }
+        if (_problemTypeId != null) f['problem_type_id'] = _problemTypeId;
         if (_carSize != null) f['car_type_size'] = _carSize;
         if (t(_diagnosisController).isNotEmpty) {
           f['ai_diagnosis'] = t(_diagnosisController);
@@ -233,6 +247,10 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
             maxLines: 3,
           ),
           const SizedBox(height: 16),
+          if (_problems.isNotEmpty) ...[
+            _problemTypeDropdown(),
+            const SizedBox(height: 16),
+          ],
           _carSizeDropdown(),
           const SizedBox(height: 16),
           _field(
@@ -307,6 +325,42 @@ class _OrderServiceDetailPageState extends State<OrderServiceDetailPage> {
                   const BorderSide(color: AppColors.primaryBlue, width: 2),
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _problemTypeDropdown() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'نوع المشكلة',
+          style: TextStyles.Size15
+              .withColor(AppColors.darkBlueBlack)
+              .withWeight(FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<int>(
+          initialValue: _problemTypeId,
+          isExpanded: true,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: AppColors.surfaceWhite,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(14),
+              borderSide: BorderSide.none,
+            ),
+          ),
+          hint: const Text('اختر نوع المشكلة'),
+          items: _problems
+              .map((p) => DropdownMenuItem(value: p.id, child: Text(p.name)))
+              .toList(),
+          onChanged: (v) => setState(() => _problemTypeId = v),
         ),
       ],
     );

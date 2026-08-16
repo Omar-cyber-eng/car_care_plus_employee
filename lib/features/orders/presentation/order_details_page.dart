@@ -11,6 +11,7 @@ import 'package:car_care_plus/features/orders/presentation/customer_car_page.dar
 import 'package:car_care_plus/features/orders/presentation/employee_report_page.dart';
 import 'package:car_care_plus/features/orders/presentation/order_service_detail_page.dart';
 import 'package:car_care_plus/features/orders/presentation/spare_parts_page.dart';
+import 'package:car_care_plus/features/orders/presentation/status_history_page.dart';
 import 'package:car_care_plus/features/orders/presentation/widgets/gps_tracker.dart';
 import 'package:car_care_plus/features/workshop/presentation/workshop_car_history_page.dart';
 
@@ -344,6 +345,20 @@ class _Actions extends StatelessWidget {
           context,
           MaterialPageRoute(
             builder: (_) => WorkshopCarHistoryPage(carId: order.carId),
+          ),
+        ),
+      ));
+    }
+
+    // سجل حالة الطلب — للموظفين فقط (لا الورشة).
+    if (isEmployee) {
+      children.add(_OutlinedButton(
+        label: 'سجل حالة الطلب',
+        icon: Icons.timeline_rounded,
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => StatusHistoryPage(orderId: order.id),
           ),
         ),
       ));
