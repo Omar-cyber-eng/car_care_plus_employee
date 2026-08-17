@@ -16,6 +16,11 @@ class AuthCubit extends Cubit<AuthState> {
     );
   }
 
+  Future<void> logout() async {
+    await authRepository.logout();
+    emit(AuthInitial());
+  }
+
   Future<void> registerWorkshop({
     required String name,
     required String email,

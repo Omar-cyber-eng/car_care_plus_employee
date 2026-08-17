@@ -49,6 +49,12 @@ class ApiConstants {
   // التقييمات (عرض فقط للموظف/الورشة)
   static const String ratings = 'ratings';
 
+  // الإشعارات داخل التطبيق (للأدوار الثلاثة)
+  static const String notifications = 'notifications';
+  static const String notificationsUnreadCount = 'notifications/unread-count';
+  static const String notificationsReadAll = 'notifications/read-all';
+  static String notificationRead(int id) => 'notifications/$id/read';
+
   // الورشة (دور workshop): ملف ورشتي + تعديلها + سجل صيانة سيارة
   static const String myWorkshop = 'workshops/my';
   static String workshop(int id) => 'workshops/$id';

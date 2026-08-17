@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:car_care_plus/core/resources/app_color.dart';
 import 'package:car_care_plus/core/resources/text_style.dart';
+import 'package:car_care_plus/core/routing/app_routes.dart';
 import 'package:car_care_plus/core/widgets/gradient_header.dart';
 import 'package:car_care_plus/features/auth/data/user_model.dart';
 import 'package:car_care_plus/features/auth/presentation/cubit/auth_cubit.dart';
@@ -22,6 +23,52 @@ class _ProfilePageState extends State<ProfilePage> {
     super.initState();
     // 🚀 جلب بيانات البروفايل عند التنزيل
     context.read<AuthCubit>().fetchProfile();
+  }
+
+  void _confirmLogout(BuildContext context) {
+    final cubit = context.read<AuthCubit>();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          'تسجيل الخروج',
+          style: TextStyles.Size18
+              .withColor(AppColors.darkBlueBlack)
+              .withWeight(FontWeight.bold),
+        ),
+        content: Text(
+          'هل تريد تسجيل الخروج من حسابك؟',
+          style: TextStyles.Size15.withColor(AppColors.coolGrey),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('إلغاء',
+                style: TextStyles.Size15.withColor(AppColors.coolGrey)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              await cubit.logout();
+              if (!mounted) return;
+              Navigator.of(this.context).pushNamedAndRemoveUntil(
+                Routes.login,
+                (route) => false,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.errorColor,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+            ),
+            child: Text('خروج',
+                style: TextStyles.Size15.withColor(AppColors.surfaceWhite)),
+          ),
+        ],
+      ),
+    );
   }
 
   // 📝 دالة إظهار نافذة التعديل السفلية
@@ -293,6 +340,29 @@ class _ProfilePageState extends State<ProfilePage> {
                             context,
                             MaterialPageRoute(
                               builder: (_) => const RatingsPage(),
+                            ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 52,
+                          child: OutlinedButton.icon(
+                            onPressed: () => _confirmLogout(context),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: AppColors.errorColor,
+                              side: const BorderSide(color: AppColors.errorColor),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                            ),
+                            icon: const Icon(Icons.logout_rounded),
+                            label: Text(
+                              'تسجيل الخروج',
+                              style: TextStyles.Size15
+                                  .withColor(AppColors.errorColor)
+                                  .withWeight(FontWeight.bold),
                             ),
                           ),
                         ),

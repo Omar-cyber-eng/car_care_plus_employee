@@ -31,6 +31,12 @@ class AuthRepositoryImpl implements AuthRepository {
   }
 
   @override
+  Future<void> logout() async {
+    await remoteDataSource.logout();
+    await SharedPrefHelper.deleteSecuredString(SharedPrefKeys.userToken);
+  }
+
+  @override
   Future<Either<String, UserModel>> registerWorkshop({
     required String name,
     required String email,

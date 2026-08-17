@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 abstract class AuthRemoteDataSource {
   Future<UserModel> login({required String email, required String password});
 
+  Future<void> logout();
+
   // تسجيل الورشة فقط (الموظف ينشئه الأدمن ويسجل دخوله فقط)
   Future<UserModel> registerWorkshop({
     required String name,
@@ -62,6 +64,14 @@ class AuthRemoteDataSourceImpl implements AuthRemoteDataSource {
     } on DioException catch (e) {
       throw Exception(e.response?.data['message'] ?? 'تعذر الاتصال بالسيرفر');
     }
+  }
+
+  @override
+  Future<void> logout() async {
+    // أفضل جهد — حتى لو فشل الطلب نُكمل الخروج محلياً بحذف التوكن.
+    try {
+      await dio.post('$baseUrl/auth/logout');
+    } catch (_) {}
   }
 
   @override

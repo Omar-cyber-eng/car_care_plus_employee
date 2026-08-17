@@ -12,6 +12,8 @@ import 'package:car_care_plus/features/orders/logic/orders_cubit.dart';
 import 'package:car_care_plus/features/orders/logic/orders_state.dart';
 import 'package:car_care_plus/features/orders/presentation/order_details_page.dart';
 import 'package:car_care_plus/features/orders/presentation/widgets/order_card.dart';
+import 'package:car_care_plus/features/notifications/data/notifications_repo.dart';
+import 'package:car_care_plus/features/notifications/presentation/notifications_page.dart';
 
 class OrdersPage extends StatefulWidget {
   const OrdersPage({super.key});
@@ -35,17 +37,34 @@ class _OrdersPageState extends State<OrdersPage> {
   String _filterLabel(OrderStatus? f) => f == null ? 'الكل' : f.label;
 
   late final OrdersCubit _cubit;
+  final NotificationsRepo _notifRepo = NotificationsRepo(ApiService());
   Timer? _pollTimer;
+  int _unread = 0;
 
   @override
   void initState() {
     super.initState();
     _cubit = OrdersCubit(OrdersRepo(ApiService()))..loadOrders();
-    // استطلاع دوري صامت (بديل الإشعارات — لا push في الباك بعد).
-    _pollTimer = Timer.periodic(
-      const Duration(seconds: 45),
-      (_) => _cubit.refreshSilently(),
-    );
+    _refreshUnread();
+    // استطلاع دوري صامت: الطلبات + عدّاد الإشعارات (بديل push غير المفعّل).
+    _pollTimer = Timer.periodic(const Duration(seconds: 45), (_) {
+      _cubit.refreshSilently();
+      _refreshUnread();
+    });
+  }
+
+  Future<void> _refreshUnread() async {
+    try {
+      final count = await _notifRepo.getUnreadCount();
+      if (mounted) setState(() => _unread = count);
+    } catch (_) {}
+  }
+
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const NotificationsPage()),
+    ).then((_) => _refreshUnread());
   }
 
   @override
@@ -65,22 +84,30 @@ class _OrdersPageState extends State<OrdersPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             GradientHeader(
-              child: Column(
+              child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'الطلبات',
-                    style: TextStyles.Size24
-                        .withColor(AppColors.surfaceWhite)
-                        .withWeight(FontWeight.bold),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'الطلبات المسندة إليك وحالتها',
-                    style: TextStyles.Size15.withColor(
-                      AppColors.surfaceWhite.withOpacity(0.8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'الطلبات',
+                          style: TextStyles.Size24
+                              .withColor(AppColors.surfaceWhite)
+                              .withWeight(FontWeight.bold),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'الطلبات المسندة إليك وحالتها',
+                          style: TextStyles.Size15.withColor(
+                            AppColors.surfaceWhite.withOpacity(0.8),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
+                  _NotificationBell(count: _unread, onTap: _openNotifications),
                 ],
               ),
             ),
@@ -210,6 +237,50 @@ class _OrdersPageState extends State<OrdersPage> {
             style: TextStyles.Size15.withColor(AppColors.coolGrey),
           ),
         ),
+      ],
+    );
+  }
+}
+
+class _NotificationBell extends StatelessWidget {
+  final int count;
+  final VoidCallback onTap;
+
+  const _NotificationBell({required this.count, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton(
+          onPressed: onTap,
+          icon: const Icon(
+            Icons.notifications_none_rounded,
+            color: AppColors.surfaceWhite,
+            size: 28,
+          ),
+        ),
+        if (count > 0)
+          Positioned(
+            right: 4,
+            top: 4,
+            child: Container(
+              padding: const EdgeInsets.all(3),
+              constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+              decoration: const BoxDecoration(
+                color: AppColors.errorColor,
+                shape: BoxShape.circle,
+              ),
+              child: Text(
+                count > 99 ? '99+' : '$count',
+                textAlign: TextAlign.center,
+                style: TextStyles.Size10
+                    .withColor(AppColors.surfaceWhite)
+                    .withWeight(FontWeight.bold),
+              ),
+            ),
+          ),
       ],
     );
   }

@@ -7,6 +7,8 @@ abstract class AuthRepository {
     required String password,
   });
 
+  Future<void> logout();
+
   // تسجيل الورشة 
   Future<Either<String, UserModel>> registerWorkshop({
     required String name,

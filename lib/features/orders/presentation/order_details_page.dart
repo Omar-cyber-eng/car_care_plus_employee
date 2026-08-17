@@ -25,11 +25,15 @@ class OrderDetailsPage extends StatefulWidget {
 }
 
 class _OrderDetailsPageState extends State<OrderDetailsPage> {
+  bool _loaded = false;
+
   @override
   void initState() {
     super.initState();
     // نجلب التفاصيل الكاملة (payments والعلاقات) لأن القائمة قد تكون مختصرة.
-    context.read<OrdersCubit>().loadOrderDetails(widget.orderId);
+    context.read<OrdersCubit>().loadOrderDetails(widget.orderId).then((_) {
+      if (mounted) setState(() => _loaded = true);
+    });
   }
 
   void _snack(BuildContext context, String message) {
@@ -62,12 +66,18 @@ class _OrderDetailsPageState extends State<OrderDetailsPage> {
         builder: (context, _) {
           final order = context.read<OrdersCubit>().orderById(widget.orderId);
           if (order == null) {
-            return Center(
-              child: Text(
-                'الطلب غير موجود',
-                style: TextStyles.Size15.withColor(AppColors.coolGrey),
-              ),
-            );
+            return _loaded
+                ? Center(
+                    child: Text(
+                      'الطلب غير موجود',
+                      style: TextStyles.Size15.withColor(AppColors.coolGrey),
+                    ),
+                  )
+                : const Center(
+                    child: CircularProgressIndicator(
+                      color: AppColors.primaryBlue,
+                    ),
+                  );
           }
 
           final authState = context.read<AuthCubit>().state;
