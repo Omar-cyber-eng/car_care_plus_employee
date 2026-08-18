@@ -199,17 +199,17 @@ class OrderModel {
     );
   }
 
+  // كل الدفعات النقدية المعلّقة (قد تكون أكثر من واحدة: الطلب + قطعة غيار).
+  List<PaymentModel> get cashPendingPayments =>
+      payments.where((p) => p.isCashPending).toList();
+
   // أول دفعة نقدية معلّقة (لزر تأكيد النقد — يأخذ payment.id لا order.id).
-  PaymentModel? get cashPendingPayment {
-    for (final p in payments) {
-      if (p.isCashPending) return p;
-    }
-    return null;
-  }
+  PaymentModel? get cashPendingPayment =>
+      cashPendingPayments.isEmpty ? null : cashPendingPayments.first;
 
   // يظهر زر تأكيد النقد متى وُجدت دفعة نقدية معلّقة (مستقلّ عن حالة الطلب).
   bool get needsCashConfirmation =>
-      cashPendingPayment != null && status != OrderStatus.cancelled;
+      cashPendingPayments.isNotEmpty && status != OrderStatus.cancelled;
 
   String get paymentLabel {
     if (payments.isEmpty) return 'غير محدد';

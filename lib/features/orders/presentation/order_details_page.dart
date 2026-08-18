@@ -235,6 +235,16 @@ class _Actions extends StatelessWidget {
     final cubit = context.read<OrdersCubit>();
     final children = <Widget>[];
 
+    // الدور يحكم الأزرار (مصفوفة صلاحيات الدليل §2).
+    final authState = context.read<AuthCubit>().state;
+    final role = authState is AuthSuccess ? authState.user.role : null;
+    final isMechanic = role == 'employee_mechanic';
+    final isEmployee = isMechanic || role == 'employee_washer';
+    final isWorkshop = role == 'workshop';
+    final orderIsOpen = order.status != OrderStatus.completed &&
+        order.status != OrderStatus.cancelled;
+    final hasCashDue = order.cashPendingPayments.isNotEmpty;
+
     if (order.canStart) {
       children.add(_FilledButton(
         label: 'بدء التنفيذ',
@@ -248,7 +258,34 @@ class _Actions extends StatelessWidget {
       ));
     }
 
-    if (order.canComplete) {
+    // استلام النقد — زر لكل دفعة نقدية معلّقة (الموظفون فقط)، بارز قبل الإنهاء.
+    // قطع الغيار قد تُنشئ دفعة نقدية إضافية حتى لو كان الدفع الأصلي غير نقدي.
+    if (isEmployee) {
+      for (final p in order.cashPendingPayments) {
+        children.add(_FilledButton(
+          label: 'استلام النقد (${p.amount.toStringAsFixed(0)} ل.س)',
+          icon: Icons.attach_money_rounded,
+          color: AppColors.successColor,
+          onTap: () async {
+            final ok = await cubit.confirmCash(
+              orderId: order.id,
+              paymentId: p.id,
+            );
+            if (context.mounted) {
+              snack(
+                context,
+                ok
+                    ? 'تم تأكيد استلام المبلغ النقدي'
+                    : 'تعذّر تأكيد النقد، حاول مجدداً',
+              );
+            }
+          },
+        ));
+      }
+    }
+
+    // إنهاء الطلب — محجوب حتى استلام كل النقد المعلّق.
+    if (order.canComplete && !hasCashDue) {
       children.add(_FilledButton(
         label: 'إنهاء الطلب',
         icon: Icons.check_rounded,
@@ -258,6 +295,10 @@ class _Actions extends StatelessWidget {
             snack(context, ok ? 'تم إنهاء الطلب' : 'تعذّر إنهاء الطلب، حاول مجدداً');
           }
         },
+      ));
+    } else if (order.canComplete && hasCashDue) {
+      children.add(const _InfoNote(
+        text: 'أكّد استلام النقد أولاً لتتمكّن من إنهاء الطلب.',
       ));
     }
 
@@ -272,15 +313,6 @@ class _Actions extends StatelessWidget {
         ),
       ),
     ));
-
-    // الدور يحكم الأزرار (مصفوفة صلاحيات الدليل §2).
-    final authState = context.read<AuthCubit>().state;
-    final role = authState is AuthSuccess ? authState.user.role : null;
-    final isMechanic = role == 'employee_mechanic';
-    final isEmployee = isMechanic || role == 'employee_washer';
-    final isWorkshop = role == 'workshop';
-    final orderIsOpen = order.status != OrderStatus.completed &&
-        order.status != OrderStatus.cancelled;
 
     // تفاصيل ميدانية: صيانة/طريق (ميكانيكي+ورشة)، سحب (ميكانيكي فقط).
     if (order.status != OrderStatus.pending &&
@@ -374,30 +406,6 @@ class _Actions extends StatelessWidget {
       ));
     }
 
-    // تأكيد النقد — للموظفين فقط (الغسّال/الميكانيكي)، لا الورشة.
-    final cashPayment = order.cashPendingPayment;
-    if (isEmployee && order.needsCashConfirmation && cashPayment != null) {
-      children.add(_FilledButton(
-        label: 'تأكيد استلام النقد',
-        icon: Icons.attach_money_rounded,
-        color: AppColors.successColor,
-        onTap: () async {
-          final ok = await cubit.confirmCash(
-            orderId: order.id,
-            paymentId: cashPayment.id,
-          );
-          if (context.mounted) {
-            snack(
-              context,
-              ok
-                  ? 'تم تأكيد استلام المبلغ النقدي'
-                  : 'تعذّر تأكيد النقد، حاول مجدداً',
-            );
-          }
-        },
-      ));
-    }
-
     if (order.status == OrderStatus.completed &&
         !order.needsCashConfirmation &&
         children.isEmpty) {
@@ -434,6 +442,37 @@ class _CompletedBanner extends StatelessWidget {
             style: TextStyles.Size15
                 .withColor(AppColors.successColor)
                 .withWeight(FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoNote extends StatelessWidget {
+  final String text;
+  const _InfoNote({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warningColor.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              color: AppColors.warningColor, size: 20),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyles.Size15
+                  .withColor(AppColors.warningColor)
+                  .withWeight(FontWeight.w600),
+            ),
           ),
         ],
       ),

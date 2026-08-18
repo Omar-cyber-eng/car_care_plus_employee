@@ -109,3 +109,92 @@
 3. **السحب**: الميكانيكي يثبّت الوجهة عبر `/destination` (إحداثيات مطلوبة).
 4. **قطع الغيار**: الميكانيكي ينشئ ويتابع؛ الاعتماد خارج تطبيقك.
 5. الأخطاء موحّدة (401/403/404/422)؛ القوائم مُرقّمة صفحات؛ decimal كنصوص؛ العلاقات whenLoaded قد تكون null.
+
+
+
+
+
+# 7) المدفوعات وقواعد التسعير — ربط كامل للورشة/الموظف
+
+> ⚠️ **حدث تغيير مهم في الصلاحيات — اقرأ هذا القسم بدقّة قبل الربط.** خلاصة الوصول:
+>
+> | المسار | الغسّال | الميكانيكي | الورشة |
+> |---|:---:|:---:|:---:|
+> | `GET /payments` (قائمة) | ❌ | ❌ | ❌ |
+> | `GET /payments/{id}` (تفاصيل) | ⚠️ عملياً ❌ | ⚠️ عملياً ❌ | ❌ |
+> | `POST /payments/{id}/confirm-cash` | ✅ (طلبه المُسنَد) | ✅ (طلبه المُسنَد) | ❌ |
+> | `GET /pricing-rules` · `/{id}` | ✅ | ✅ | ❌ |
+
+## 7.1 المدفوعات — الموظف يؤكّد النقد فقط (لا قائمة ولا تفاصيل)
+
+**التغيير:** الموظف **لا يملك `show.payments`** (الجمع) → قائمة `GET /payments` تُرجِع **403**.
+ويملك `show.payment` (المفرد) لكن `GET /payments/{id}` **يرفضه منطق `assertCanView`** (لأن `payment.user_id`
+هو **العميل الدافع** لا الموظف) → عملياً **لا يقدر يفتح دفعة عبر هذا المسار**. **الورشة بلا أي صلاحية دفع إطلاقاً.**
+
+فالمسار الوحيد الفعلي للموظف هو **تأكيد النقد**:
+
+### `POST /api/payments/{paymentId}/confirm-cash`
+- **مَن:** الغسّال أو الميكانيكي، وبشرط أن يكون **الموظف المُسنَد لهذا الطلب** (`order.employee_id === موظفي`) — وإلا **403** "You are not allowed to confirm this payment".
+- **الشرط على الدفعة:** `method = cash` و`status = pending` — وإلا 422.
+- **body:** لا يوجد.
+- **الرد:** `PaymentResource` بعد أن يصبح `status = paid`.
+
+**⭐ من أين آتي بـ `paymentId`؟** ليس عبر `/payments` (ممنوع)، بل من **الطلب نفسه**:
+`GET /api/bookings/{id}` يرجع الطلب ومعه مصفوفة `payments[]`، كل عنصر فيه `{ id, method, status, amount, ... }`.
+خذ `id` الدفعة التي `method="cash"` و`status="pending"`.
+
+**شكل PaymentResource:**
+```json
+{ "id": 31, "payment_number": "PAY-...", "type": "order",
+  "method": "cash", "status": "pending",   // pending → paid بعد التأكيد
+  "amount": "60.00", "points_used": 0 }
+```
+- قيم `method`: `cash|card|wallet|point|package` · `status`: `pending|paid|failed|refunded` · `type`: `order|package|wallet_topup`.
+
+### الفلو الكامل لتأكيد النقد (Dart)
+```dart
+// 1) افتح تفاصيل الطلب (فيه payments[])
+final order = (await dio.get('/bookings/$orderId')).data['data'];
+
+// 2) جد الدفعة النقدية المعلّقة
+final cash = (order['payments'] as List).firstWhere(
+  (p) => p['method'] == 'cash' && p['status'] == 'pending',
+  orElse: () => null,
+);
+
+// 3) أظهر زر "تأكيد استلام النقد" فقط إن وُجدت (cash != null)
+if (cash != null) {
+  await dio.post('/payments/${cash['id']}/confirm-cash'); // بلا body
+  // بعد النجاح: الدفعة أصبحت paid — أعد جلب الطلب أو حدّث الحالة محلياً
+}
+```
+
+**قواعد UX للفرونت:**
+1. زر "تأكيد النقد" يظهر **فقط** إذا في `order.payments[]` دفعة `cash` + `pending`، **و**الطلب مُسنَد لك.
+2. **مستقلّ عن حالة الطلب** — لا يشترط أن يكون الطلب `completed` (يمكن التأكيد أثناء `in_progress`).
+3. لا تبنِ شاشة "قائمة مدفوعاتي" للموظف/الورشة — غير متاحة (403). المدفوعات تُعرض **ضمن تفاصيل الطلب** فقط.
+
+## 7.2 قواعد التسعير — `pricing-rules` (مرجع، للغسّال/الميكانيكي فقط)
+
+بيانات مرجعية للقراءة تشرح كيف تُحسب الأسعار (رسوم VIP، مسافة، توقيت...). **الورشة لا تملكها** (`show.pricing_rules`).
+
+| المسار | مَن |
+|---|---|
+| `GET /api/pricing-rules` | الغسّال + الميكانيكي |
+| `GET /api/pricing-rules/{id}` | الغسّال + الميكانيكي |
+
+**شكل PricingRuleResource:**
+```json
+{ "id": 1, "pricing_rule_type_id": 10,
+  "rule_type": { PricingRuleTypeResource }|null,
+  "name": "VIP Surcharge", "name_ar": "رسوم VIP",
+  "value": "20.00", "conditions": { ... }, "is_active": true }
+```
+- استعمالها اختياري (للعرض التوضيحي فقط). القوائم قد تكون غير مُرقّمة — تعامل معها كمصفوفة كاملة.
+- `value`/الأسعار decimal **كنصوص**؛ `conditions` كائن JSON حرّ حسب نوع القاعدة.
+
+## 7.3 خلاصة القسم 7
+- **الموظف:** فعله الوحيد في الدفع = **`confirm-cash`** على طلبه المُسنَد (بمعرّف الدفعة من `order.payments[]`). لا قائمة ولا تفاصيل مباشرة.
+- **الورشة:** **لا شيء** في الدفع ولا التسعير (403).
+- **pricing-rules:** مرجع قراءة للغسّال/الميكانيكي فقط.
+- الأخطاء موحّدة (403 صلاحية/ملكية · 422 دفعة غير نقدية أو غير معلّقة). decimal كنصوص. العلاقات whenLoaded قد تكون null.
